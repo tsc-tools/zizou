@@ -1,0 +1,295 @@
+default:
+  # Features to compute
+  features:
+    - RSAM
+    - SSAM
+    - DSAR
+    - SpectralFeatures
+    - EnergyExplainedByRSAM
+  # Volcanoes to be included in the computation. The stations for each volcano
+  # are must be defined in the metadata.json file
+  volcanoes:
+    - Whakaari
+    - Tongariro
+    - Ruapehu
+    - Ngauruhoe
+    - Raoul Island
+    - Taupo
+  # The time interval in seconds to compute features over
+  interval: 600
+  # Data sources to check for raw data; they will be checked in 
+  # the order they are listed, and the first one with data will be used
+  datasources:
+    - sds
+    - fdsn
+    - s3
+  # The directory to store output files
+  sds_dir: /home/zizou/data/sds_archive
+  fdsn_urls:
+    - https://service.geonet.org.nz
+    - https://service-nrt.geonet.org.nz
+  outdir: /home/zizou/data
+  # The directory to store log files
+  logdir: /home/zizou/data/
+  # Start time for the archive. If a station recording starts
+  # after this time, the station start time will be used instead
+  archive_start: 2000-01-01
+  # End time for the archive.
+  archive_end: 2023-01-30
+  # The time interval in hours to look back for data when updating
+  # the archive
+  lookback_interval: 1
+  # If test = true; the pipeline will run on synthetic data
+  # test = true
+  # The crontab schedule for running the pipeline
+  cronschedule: "*/10 * * * *"
+
+rsam:
+  # The type of filtering that is applied before
+  # computing RSAM. Can be either bandpass,
+  # highpass, or lowpass
+  filtertype: bandpass
+  # The low and high cutoff frequencies for the filter. 
+  # If filtertype is highpass or lowpass, only the first
+  # or last value is used, respectively
+  filterfreq:
+    low: 2
+    high: 5
+  reindex: true
+  # The wide frequency band to compute 'energy explained by RSAM'
+  filtertype_wb: bandpass
+  # Same as above for the wide frequency band
+  filterfreq_wb:
+    low: .5 
+    high: 10 
+
+ssam:
+  # Segment length in seconds; overrides value in default section
+  interval: 60
+  # If the value is less than 1 it is treated as the percentage
+  # of segment overlap; else it is the step size in sample points
+  per_lap: 0
+  # Divide by the sampling frequency so that density
+  # function has units of dB/Hz and can be integrated
+  # by the frequency values.
+  scale_by_freq: True
+  # The number of windows over which to
+  # average the spectrogram.
+  smooth: null
+  # Can be either 'center' or 'start'. If 'center', the
+  # timestamp of each spectrum is the center of the windows
+  # from which the spectrum was computed. If 'start' it is
+  # the timestamp of the first sample of the first window. 
+  timestamp: start 
+  # Frequencies at which to return the spectrogram. This
+  # uses linear interpolation to compute the spectrogram
+  # at the given frequencies from the original spectrogram.
+  frequencies:
+    start: 0
+    end: 25.1
+    step: 0.1
+  # Interval to upsample the dataset using linear
+  # interpolation over the first interval and then
+  # downsample using the mean over the second interval.
+  resample_int: 
+    upsample: null 
+    downsample: 10min
+
+dsar:
+  # The type of filtering that is applied before
+  # computing RSAM. Can be either bandpass,
+  # highpass, or lowpass
+  filtertype: bandpass
+  # low-frequency band
+  lowerfreqband:
+    low: 4.5 
+    high: 8 
+  #  high-frequency band RSAM
+  higherfreqband:
+    low: 8 
+    high: 16
+
+spectral_features:
+  # Compute the following spectral features:
+  # Central frequency (acceleration) in Hz
+  # Bandwidth (acceleration)
+  # predominant frequency (acceleration) in Hz
+  
+  # Prefilter applied before feature computation
+  filtertype: highpass
+  filterfreq:
+    low: 0.5
+    high: None
+
+pca:
+  features:
+    - rsam
+    - central_freq
+    - bandwidth
+    - predom_freq
+    - sonogram
+  fit_pca: True
+
+autoencoder:
+  layers: [2000,500,200,6]
+  epochs: 5
+  patience: 10
+
+metadata:
+  volcano:
+  - eruptions:
+    - 05-08-2012
+    - 20-08-2013
+    - 04-10-2013
+    - 08-10-2013
+    - 11-10-2013
+    - 27-04-2016
+    - 13-09-2016
+    - 09-12-2019
+    name: Whakaari
+    network:
+    - net_code: NZ
+      stations:
+      - channel:
+        - code: HHZ
+        latitude: '-37.5265'
+        location: '10'
+        longitude: '177.1894'
+        sta_code: WIZ
+        starttime: '2007-04-19T04:00:00Z'
+      - channel:
+        - code: HHZ
+        latitude: '-37.5181'
+        location: '10'
+        longitude: '177.1778'
+        sta_code: WSRZ
+        starttime: '2013-04-08T04:00:00Z'
+    unrest periods:
+    - endtime: 03-09-2012
+      starttime: 20-06-2012
+    - endtime: 11-10-2013
+      starttime: 01-08-2013
+    - endtime: 01-02-2016
+      starttime: 08-01-2016
+    - endtime: 09-12-2019
+      starttime: 01-09-2019
+  - eruptions:
+    - 04-10-2006
+    - 25-09-2007
+    name: Ruapehu
+    network:
+    - net_code: NZ
+      stations:
+      - channel:
+        - code: HHZ
+        latitude: '-39.2679'
+        location: '10'
+        longitude: '175.5617'
+        sta_code: MAVZ
+        starttime: '2012-05-22T02:00:00Z'
+      - channel:
+        - code: HHZ
+        latitude: '-39.2825'
+        location: '10'
+        longitude: '175.5886'
+        sta_code: WHVZ
+        starttime: '2009-04-14T00:30:00Z'
+      - channel:
+        - code: HHZ
+        latitude: '-39.2549'
+        location: '10'
+        longitude: '175.5530'
+        sta_code: FWVZ
+        starttime: '2005-03-16T01:00:01Z'
+      - channel:
+        - code: HHZ
+        latitude: '-39.299'
+        location: '10'
+        longitude: '175.548'
+        sta_code: TRVZ
+        starttime: '2005-03-16T13:00:01Z'
+    unrest periods:
+    - endtime: 04-10-2006
+      starttime: 15-07-2006
+    - endtime: 25-09-2007
+      starttime: 15-07-2007
+  - eruptions: []
+    name: Ngauruhoe
+    network:
+    - net_code: NZ
+      stations:
+      - channel:
+        - code: HHZ
+        latitude: '-39.1631'
+        location: '10'
+        longitude: '175.6651'
+        sta_code: OTVZ
+        starttime: '2004-11-18T04:00:00Z'
+    unrest periods: []
+  - eruptions:
+    - 06-08-2012
+    - 21-11-2012
+    name: Tongariro
+    network:
+    - net_code: NZ
+      stations:
+      - channel:
+        - code: HHZ
+        latitude: '-39.0985'
+        location: '10'
+        longitude: '175.6760'
+        sta_code: NTVZ
+        starttime: '2014-11-07T00:45:00Z'
+    unrest periods:
+    - endtime: 06-08-2012
+      starttime: 01-07-2012
+    - endtime: 21-11-2012
+      starttime: 05-11-2012
+  - eruptions:
+    - 16-03-2006
+    name: Raoul Island
+    network:
+    - net_code: NZ
+      stations:
+      - channel:
+        - code: HHZ
+        latitude: '-29.2449'
+        location: '10'
+        longitude: '-177.9289'
+        sta_code: RIZ
+        starttime: '2009-05-18T00:01:00Z'
+      - channel:
+        - code: HHZ
+        latitude: '-29.2620'
+        location: '10'
+        longitude: '-177.9203'
+        sta_code: GLKZ
+        starttime: '2009-05-19T00:00:00Z'
+    unrest periods: []
+  - eruptions: []
+    name: Taupo
+    network:
+    - net_code: NZ
+      stations:
+      - channel:
+        - code: HHZ
+        latitude: --38.866
+        location: '10'
+        longitude: '175.772'
+        sta_code: RATZ
+        starttime: '1984-11-21T13:00:00Z'
+      - channel:
+        - code: HHZ
+        latitude: '-38.802'
+        location: '10'
+        longitude: '175.793'
+        sta_code: KPRZ
+        starttime: '2022-12-13T13:00:00Z'
+      - channel:
+        - code: HHZ
+        latitude: '-38.846'
+        location: '10'
+        longitude: '176.048'
+        sta_code: OAHZ
+        starttime: '2022-12-07T17:30:00Z'
+    unrest periods: []

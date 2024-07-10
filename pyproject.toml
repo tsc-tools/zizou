@@ -1,0 +1,48 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "zizou"
+version = "0.0.1"
+authors = [
+    {name = "Yannik Behr", email = "y.behr@gns.cri.nz"},
+    {name = "Christof Mueller", email = "c.mueller@gns.cri.nz"},
+]
+description = "Python package to detect anomalies in geoscience time series data"
+license = {text = "GPL v3"}
+readme = "README.md"
+requires-python = ">=3.7"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Operating System :: OS Independent",
+]
+
+dependencies = [
+    "boto3",
+    "pandas",
+    "numpy",
+    "scipy",
+    "obspy",
+    "tqdm",
+    "xarray[io]",
+    "pyyaml"
+]
+
+[project.optional-dependencies]
+ml = ["scikit-learn", "pytorch"]
+
+[project.urls]
+Homepage = "https://github.com/SAM-Toolbox/tsctools"
+Issues = "https://github.com/SAM-Toolbox/tsctools/issues"
+
+[tool.setuptools.packages.find]
+where = ["src", "tests"]
+
+[tool.setuptools.package-data]
+zizou = ["data/*.yml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+log_cli = true

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SAM API Documentation</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+        }
+        header {
+            background-color: #333;
+            color: white;
+            text-align: center;
+            padding: 1em;
+        }
+        section {
+            max-width: 800px;
+            margin: 2em auto;
+            padding: 2em;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #333;
+        }
+        p {
+            line-height: 1.6;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>Your API Name</h1>
+    <p>Seismic Acoustic Monitoring Tool (SAM) - API</p>
+</header>
+
+<section>
+    <h2>Overview</h2>
+    <p>
+        Welcome to the documentation for Seismic Acoustic Monitoring API. This API provides access to waveform features and
+        analysis results computed by SAM.
+    </p>
+
+    <!--h2>Authentication</h2>
+    <p>
+        To access the API, you need to authenticate using [authentication method]. Obtain your API key from [location].
+    </p-->
+
+    <h2>Endpoints</h2>
+    <p>
+        The endpoints available in the API are:
+    </p>
+    <ul>
+        <li><strong>GET /feature:</strong> Request waveform features and analysis results.</li>
+        <li><strong>GET /featureEndpoint:</strong> Request meta information on available stations, features and results.</li>
+    </ul>
+
+    <h2>Code Examples</h2>
+    <h3>Requesting meta data</h3>
+    The following will return information on available stations, features and results in JSON format.
+    <pre>
+        curl -X GET "http://your.host.server:yourport/featureEndpoint"
+    </pre>
+    To do the same with Python using requests you can use the following code:
+    <pre>
+        import requests
+        url = "http://your.host.server:yourport/featureEndpoint"
+        response = requests.get(url)
+        response.json()
+    </pre>
+    <h3>Requesting data</h3>
+    The following example shows how to request RSAM data for station WIZ at volcano Whakaari
+    between 2019-12-01 and 2019-12-31. The return format is CSV.
+    <pre>
+    curl -X GET "http://your.host.server:yourport/feature?name=rsam&starttime=2019-12-01T00:00:00&endtime=2019-12-31T00:00:00&volcano=Whakaari&site=WIZ"
+    </pre>
+    To do the same with Python using pandas you can use the following code:
+    <pre>
+        import pandas as pd
+        feature="rsam"
+        starttime="2019-12-01T00:00:00"
+        endtime="2019-12-31T00:00:00"
+        volcano="Whakaari"
+        site="WIZ"
+        url = f"http://your.host.server:yourport/feature?name={feature}&starttime={starttime}&endtime={endtime}&volcano={volcano}&site={site}"
+        pd.read_csv(url, parse_dates=True, index_col=0)
+    </pre>
+</section>
+</section>
+
+</body>
+</html>
