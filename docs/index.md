@@ -63,10 +63,3 @@ To find the path of your kernel.json file you can run:
 ```
 jupyter --paths
 ```
-
-## Documentation
-Older docstrings are written using [sphinx syntax](https://sphinx-rtd-tutorial.readthedocs.io/en/latest/docstrings.html) but we are changing over to the more
-succinct and readable [numpy syntax](https://numpydoc.readthedocs.io/en/latest/format.html). So if you add code please use the latter.
-
-To generate documentation we use [mkdocs](https://www.mkdocs.org/) with the [mkdocstrings](https://mkdocstrings.github.io/python/) plugin.
-

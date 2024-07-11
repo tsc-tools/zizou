@@ -1,0 +1,17 @@
+site_name: Zizou 
+nav:
+  - Home: index.md
+  - User Guide: user_guide.md
+  - API: api.md
+  - About: about.md
+theme: readthedocs
+plugins:
+  - mkdocstrings:
+      default_handler: python
+      handlers:
+        python:
+          options:
+            docstring_style: sphinx
+            heading_level: 3
+            parameter_headings: true
+            show_root_toc_entry: true
