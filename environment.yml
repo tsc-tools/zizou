@@ -1,0 +1,30 @@
+name: zizou 
+channels:
+    - pytorch
+    - conda-forge
+dependencies:
+    - python=3.9
+    - dask<=2023.5
+    - h5netcdf=1.1*
+    - h5py=3.8*
+    - ipykernel=6.23*
+    - netcdf4=1.6*
+    - obspy=1.4*
+    - numpy=1.23.1*
+    - pandas=2.0*
+    - plotly=5.14*
+    - pytest=7.3*
+    - pytest-cov=4.0*
+    - scikit-learn=1.2*
+    - tqdm
+    - xarray=2023.4*
+    - pytorch
+    - cpuonly
+    - pip
+    - pip:
+        - kernda
+        - python-json-logger==2.0
+        - boto3==1.26
+        - moto[s3]==4.1
+        - scikit-fuzzy==0.4
+        - bottleneck
