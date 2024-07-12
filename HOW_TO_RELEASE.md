@@ -45,7 +45,7 @@ git init
 git add .
 git commit -m "update documentation"
 git branch -m main
-git add origin git@github.com:tsc-tools/tsc-tools.github.io.git
+git add origin git@github.com:tsc-tools/zizou.github.io.git
 git push -u --force origin main
 ```
 [Github pages](https://pages.github.com/) will then publish the documentation under https://tsc-tools.github.io.
