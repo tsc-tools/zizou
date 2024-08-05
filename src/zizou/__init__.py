@@ -4,7 +4,6 @@ from typing import Optional
 
 from zizou.anomaly_base import AnomalyDetectionBaseClass
 # from zizou.pca import PCA
-from zizou.data import FeatureRequest
 from zizou.feature_base import FeatureBaseClass
 from zizou.rsam import RSAM
 from zizou.spectral_features import SpectralFeatures

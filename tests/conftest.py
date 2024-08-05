@@ -6,7 +6,6 @@ from subprocess import Popen
 import pytest
 import yaml
 
-from zizou.data import FeatureRequest
 from zizou.util import generate_test_data, xarray2hdf5
 
 def pytest_addoption(parser):
