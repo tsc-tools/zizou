@@ -19,10 +19,13 @@ from zizou.util import xarray2hdf5, generate_test_data, test_signal
 
 
 from zizou.data import (DataSource,
-                       VolcanoMetadata,
-                       FeatureRequest,
-                       PostProcess,
-                       PostProcessException)
+                        SDSWaveforms,
+                        S3Waveforms,
+                        MockSDSWaveforms,
+                        FDSNWaveforms,
+                        VolcanoMetadata,
+                        PostProcess,
+                        PostProcessException)
 from zizou import get_data
 
 
@@ -45,13 +48,13 @@ class DataTestCase(unittest.TestCase):
         Test that the right exceptions are raised.
         """
         with self.assertRaises(ValueError):
-            ds = DataSource(sources=())
+            ds = DataSource(clients=())
 
         with self.assertRaises(ValueError):
-            ds = DataSource(sources=('blub', 'blab'))
+            ds = DataSource(clients=('blub', 'blab'))
 
         with self.assertRaises(ValueError):
-            ds = DataSource(fdsn_urls=('/foo/bar'))
+            ds = FDSNWaveforms(url='/foo/bar')
 
     @unittest.skip("Needs rewrite as it's testing a real FDSN server")
     def test_get_waveforms(self):
@@ -59,8 +62,16 @@ class DataTestCase(unittest.TestCase):
         Test that the waveforms returned from SDS and FDSNws are
         consistent.
         """
-        ds1 = DataSource(sources=('fdsn',))
-        ds2 = DataSource(sources=('sds',), sds_dir=self.sds_dir,
+        fdsn_urls=('https://service.geonet.org.nz',
+                   'https://service-nrt.geonet.org.nz'),
+        sdsc = SDSWaveforms(sds_dir=self.sds_dir, fdsn_urls=fdsn_urls,
+                            staxml_dir=self.sds_dir, fill_value=np.nan)
+        fdsn_clients = []
+        for url in fdsn_urls: 
+            fdsn_clients.append(FDSNWaveforms(url=url, fill_value=np.nan))
+ 
+        ds1 = DataSource(clients=fdsn_clients)
+        ds2 = DataSource(clients=(sdsc), sds_dir=self.sds_dir,
                          staxml_dir=self.sds_dir)
         # dates are inclusive, and complete days
         starttime = UTCDateTime(year=2013, julday=240)
@@ -76,8 +87,11 @@ class DataTestCase(unittest.TestCase):
         """
         Test behaviour of traces with gaps.
         """
-        ds1 = DataSource(sources=('sds',), sds_dir=self.sds_dir,
-                         staxml_dir=self.sds_dir)
+        fdsn_urls=('https://service.geonet.org.nz',
+                   'https://service-nrt.geonet.org.nz'),
+        sdsc = SDSWaveforms(sds_dir=self.sds_dir, fdsn_urls=fdsn_urls,
+                            staxml_dir=self.sds_dir, fill_value=np.nan)
+        ds1 = DataSource(clients=[sdsc])
         starttime = UTCDateTime(2010, 11, 26, 0, 0, 0)
         endtime = starttime + 86400.
         stream = 'NZ.WIZ.10.HHZ'
@@ -111,8 +125,11 @@ class DataTestCase(unittest.TestCase):
         """
         Test that start and end times are what we expect.
         """
-        ds = DataSource(sources=('sds',), sds_dir=self.sds_dir,
-                        staxml_dir=self.sds_dir)
+        fdsn_urls=('https://service.geonet.org.nz',
+                   'https://service-nrt.geonet.org.nz'),
+        sdsc = SDSWaveforms(sds_dir=self.sds_dir, fdsn_urls=fdsn_urls,
+                            staxml_dir=self.sds_dir, fill_value=np.nan)
+        ds = DataSource(clients=[sdsc])
         starttime = UTCDateTime(year=2013, julday=240)
         endtime = starttime + 86400.
         stream = 'NZ.WIZ.10.HHZ'
@@ -139,8 +156,11 @@ class DataTestCase(unittest.TestCase):
         are available for the time periods where there are both station
         and waveform data, np.nan otherwise.
         """
-        ds = DataSource(sources=('sds',), sds_dir=self.sds_dir,
-                        staxml_dir=self.sds_dir, chunk_size=86400.)
+        fdsn_urls=('https://service.geonet.org.nz',
+                   'https://service-nrt.geonet.org.nz')
+        sdsc = SDSWaveforms(sds_dir=self.sds_dir, fdsn_urls=fdsn_urls,
+                            staxml_dir=self.sds_dir, fill_value=np.nan)
+        ds = DataSource(clients=[sdsc], chunk_size=86400.)
         starttime = UTCDateTime(2019, 4, 17)
         endtime = UTCDateTime(2019, 4, 20)
         net, site, loc, comp = ('NZ', 'NTVZ', '10', 'HHZ')
@@ -188,9 +208,12 @@ class DataTestCase(unittest.TestCase):
         filename = tempfile.mktemp()
         test_data2.write(filename, format='MSEED')
         client.upload_file(Filename=filename, Bucket=bucket_name, Key=key2)
-        
-        ds = DataSource(staxml_dir=self.sds_dir, sources=('s3',),
-                        s3bucket=bucket_name)
+        fdsn_urls=('https://service.geonet.org.nz',
+                   'https://service-nrt.geonet.org.nz')
+        awsc = S3Waveforms(s3bucket=bucket_name, fdsn_urls=fdsn_urls,
+                           staxml_dir=self.sds_dir, fill_value=np.nan)
+ 
+        ds = DataSource(clients=[awsc])
         net, site, loc, comp = ('NZ', 'MAVZ', '10', 'HHZ')
         gen = ds.get_waveforms(net, site, loc, comp, starttime1,
                                endtime2)
@@ -215,7 +238,8 @@ class DataTestCase(unittest.TestCase):
         Test that the mock client is working.
         """
         sds_dir = tempfile.mkdtemp()
-        ds = DataSource(sds_dir=sds_dir, sources=['mock'])
+        msc = MockSDSWaveforms(sds_dir=sds_dir)
+        ds = DataSource(clients=[msc])
         net, site, loc, comp = ('NZ', 'MAVZ', '10', 'HHZ')
         starttime = UTCDateTime(2024, 4, 11, 3, 0, 0)
         endtime = UTCDateTime(2024, 4, 11, 4, 0, 0)
@@ -502,120 +526,6 @@ class MetadataTestCase(unittest.TestCase):
 
         # Test case for a non-existing station
         assert vm.get_site_information("NONEXISTENT") is None
-
-class FeatureRequestTestCase(unittest.TestCase):
-
-    def setUp(self):
-        # create test directory
-        self.tempdir = tempfile.mkdtemp()
-        self.rootdir = os.path.join(self.tempdir, 'Mt_Doom', 'MDR', 'HHZ')
-        try:
-            os.makedirs(self.rootdir)
-        except FileExistsError:
-            pass
-
-    def tearDown(self):
-        if os.path.isdir(self.tempdir):
-            shutil.rmtree(self.tempdir)
-            
-    def test_false_feature(self):
-        fq = FeatureRequest(rootdir=self.tempdir)
-        with self.assertRaises(ValueError):
-            fakefeature = fq('fakefeature')
-
-    def test_call_multiple_days(self):
-        startdate = UTCDateTime(2016, 1, 1)._get_datetime()
-        enddate = UTCDateTime(2016, 1, 2, 12)._get_datetime()
-        xdf = generate_test_data(dim=1, ndays=20, tstart=startdate)
-        xarray2hdf5(xdf, self.rootdir)
-        fq = FeatureRequest(rootdir=self.tempdir)
-        fq.starttime = startdate
-        fq.endtime = enddate
-        fq.volcano = 'Mt_Doom'
-        fq.site = 'MDR'
-        fq.channel = 'HHZ'
-        rsam = fq('rsam')
-        # Check data
-        xd_index = dict(datetime=slice(startdate,
-                                       (enddate-pd.to_timedelta(fq.interval))))
-
-        np.testing.assert_array_almost_equal(
-            rsam.loc[startdate:enddate], xdf.rsam.loc[xd_index], 5)
-        # Check datetime range is correct
-        first_time = pd.to_datetime(rsam.datetime.values[0])
-        last_time = pd.to_datetime(rsam.datetime.values[-1])
-        self.assertEqual(pd.to_datetime(startdate), first_time)
-        self.assertEqual(pd.to_datetime(enddate) - pd.to_timedelta(fq.interval),
-                         last_time)
-
-    def test_call_single_day(self):
-        fq = FeatureRequest(rootdir=self.rootdir)
-        startdate = datetime.datetime(2016, 1, 2, 1)
-        enddate = datetime.datetime(2016, 1, 2, 12)
-        xdf = generate_test_data(dim=1, tstart=startdate)
-        xarray2hdf5(xdf, self.rootdir)
-        fq = FeatureRequest(rootdir=self.tempdir)
-        fq.starttime = startdate
-        fq.endtime = enddate
-        fq.volcano = 'Mt_Doom'
-        fq.site = 'MDR'
-        fq.channel = 'HHZ'
-        rsam = fq('rsam')
-        # Check datetime range is correct
-        first_time = pd.to_datetime(rsam.datetime.values[0])
-        last_time = pd.to_datetime(rsam.datetime.values[-1])
-        self.assertEqual(pd.to_datetime(startdate), first_time)
-        self.assertEqual(pd.to_datetime(enddate) - pd.to_timedelta(fq.interval),
-                         last_time)
-
-    def test_rolling_window(self):
-        startdate = UTCDateTime(2016, 1, 1)._get_datetime()
-        enddate = UTCDateTime(2016, 1, 2, 12)._get_datetime()
-        xdf = generate_test_data(dim=1, ndays=20, tstart=startdate)
-        xarray2hdf5(xdf, self.rootdir)
-        fq = FeatureRequest(rootdir=self.tempdir)
-
-        stack_len_seconds = 3600
-        stack_len_string = '1H'
-
-        num_windows = int(stack_len_seconds / pd.Timedelta(fq.interval).seconds)
-        fq.starttime = startdate
-        fq.endtime = enddate
-        fq.volcano = 'Mt_Doom'
-        fq.site = 'MDR'
-        fq.channel = 'HHZ'
-        rsam = fq('rsam')
-        rsam_rolling = fq('rsam', stack_length=stack_len_string)
-
-        # Check correct datetime array
-        np.testing.assert_array_equal(rsam.datetime.values,
-                                      rsam_rolling.datetime.values)
-        # Check correct values
-        rolling_mean = [
-            np.nanmean(rsam.data[(ind-num_windows+1):ind+1])
-            for ind in np.arange(num_windows, len(rsam_rolling.data))
-        ]
-        np.testing.assert_array_almost_equal(
-            np.array(rolling_mean), rsam_rolling.values[num_windows:], 6
-        )
-
-    def test_cache(self):
-        """
-        Test that data loaded from files and from cache are identical.
-        """
-        startdate = UTCDateTime(2016, 1, 1)._get_datetime()
-        enddate = UTCDateTime(2016, 1, 2, 12)._get_datetime()
-        xdf = generate_test_data(dim=1, ndays=20, tstart=startdate)
-        xarray2hdf5(xdf, self.rootdir)
-        fq = FeatureRequest(rootdir=self.tempdir)
-        fq.starttime = startdate 
-        fq.endtime = enddate 
-        fq.volcano = 'Mt_Doom'
-        fq.site = 'MDR'
-        fq.channel = 'HHZ'
-        data_from_files = fq('RSAM')
-        data_from_cache = fq('RSAM')
-        xr.testing.assert_equal(data_from_files, data_from_cache)
 
 
 if __name__ == '__main__':

@@ -252,7 +252,10 @@ def get_instrument_response(net, site, loc,
     return inv
 
 
-class SDSWaveforms(object):
+class WaveformBaseclass:
+    pass
+
+class SDSWaveforms(WaveformBaseclass):
 
     def __init__(self, sds_dir, fdsn_urls, staxml_dir,
                  fill_value=np.nan):
@@ -291,7 +294,7 @@ class SDSWaveforms(object):
         return tr
 
 
-class MockSDSWaveforms(object):
+class MockSDSWaveforms(WaveformBaseclass):
     """
     Mock SDSWaveforms class for testing by creating
     synthetic data for the requested streams.
@@ -371,7 +374,7 @@ class MockSDSWaveforms(object):
         return st[0]
 
 
-class FDSNWaveforms(object):
+class FDSNWaveforms(WaveformBaseclass):
 
     def __init__(self, url, debug=False, fill_value=np.nan):
         """
@@ -393,7 +396,7 @@ class FDSNWaveforms(object):
         return st[0]
 
 
-class S3Waveforms(object):
+class S3Waveforms(WaveformBaseclass):
 
     def __init__(self, s3bucket, fdsn_urls, staxml_dir, debug=False,
                  fill_value=np.nan):
@@ -460,54 +463,20 @@ class S3Waveforms(object):
 
 class DataSource:
 
-    def __init__(self, sds_dir='/geonet/seismic',
-                 staxml_dir='/scratch/zizou/STATIONXML', 
-                 s3bucket='geonet-open-data',
-                 fdsn_urls=('https://service.geonet.org.nz',
-                            'https://service-nrt.geonet.org.nz'),
-                 debug=False, chunk_size=None,
-                 sources = ('sds', 'fdsn', 's3'),
-                 fill_value=np.nan):
-        
-        if len(sources) < 1:
-            msg = "Sources can't be empty!"
-            raise ValueError(msg)
-        
-        for src in sources:
-            if src not in ('sds', 'fdsn', 's3', 'mock'):
-                msg = "Sources have to be one or several of 'sds', 'fdsn', 's3' 'mock': " + src
-                raise ValueError(msg)
-        self.staxml_dir = staxml_dir
+    def __init__(self, clients, chunk_size=None):
         self.chunk_size = chunk_size
-        self.clients = []
-        if 'sds' in sources:
-            try:
-                self.clients.append(SDSWaveforms(sds_dir=sds_dir,
-                                                 fdsn_urls=fdsn_urls,
-                                                 staxml_dir=staxml_dir,
-                                                 fill_value=fill_value))
-            except OSError as e:
-                logger.error(e)    
+        
+        if len(clients) < 1:
+            msg = "At least one data client is required."
+            raise ValueError(msg)
 
-        if 's3' in sources:
-            try:
-                self.clients.append(S3Waveforms(s3bucket=s3bucket,
-                                                fdsn_urls=fdsn_urls,
-                                                staxml_dir=staxml_dir,
-                                                fill_value=fill_value))
-            except ClientError as e:
-                logger.error(e)
-            
-        if 'fdsn' in sources:
-            for url in fdsn_urls: 
-                try:
-                    logger.info("Adding FDSN client for {}".format(url))
-                    self.clients.append(FDSNWaveforms(url=url, debug=debug,
-                                                      fill_value=fill_value))
-                except FDSNException as e:
-                    logger.error(e)        
-        if 'mock' in sources:
-            self.clients.append(MockSDSWaveforms(sds_dir=sds_dir))
+        # Test that all waveform clients are derived from WaveformBaseclass
+        for client in clients:
+            if not issubclass(client.__class__, WaveformBaseclass):
+                msg = "All clients must be derived from WaveformBaseclass."
+                raise ValueError(msg)
+
+        self.clients = clients
 
     def get_waveforms(self, net, site, loc, comp, start, end):
         t_start = start
@@ -543,203 +512,6 @@ class DataSource:
             else:
                 # go beyond the end to stop the loop
                 t_end = end + 1.
-
-
-def hashForFeatureRequest__Call(args, kwargs):
-    key = []
-    self = args[0]
-    key.append((self.volcano, self.site, self.channel,
-                str(self.starttime), str(self.endtime)))
-    for _a in args[1:]:
-        key.append(_a)
-    key = tuple(key)    
-    key += tuple(sorted(kwargs.items()))
-    hashValue = hash(key)
-    return hashValue
-
-
-class FeatureRequest:
-    """
-    Query computed features
-
-    :param rootdir: Path to parent directory.
-    :type rootdir: str
-    :param starttime: Begin of request
-    :type starttime: :class:`datetime.datetime`
-    :param endtime: Begin of request
-    :type endtime: :class:`datetime.datetime`
-
-    >>> import datetime
-    >>> fq = FeatureRequest()
-    >>> start = datetime.datetime(2012,1,1,0,0,0)
-    >>> end = datetime.datetime(2012,1,2,23,59,59)
-    >>> volcano = 'Whakaari'
-    >>> site = 'WIZ'
-    >>> chan = 'HHZ'
-    >>> fq.volcano = volcano
-    >>> fq.starttime = start
-    >>> fq.endtime = end
-    >>> fq.site = site
-    >>> fq.channel = chan
-    >>> rsam = fq("rsam")
-    """
-    features1D = ('dsar', 'rsam', 'rsam_energy_prop',
-                  'central_freq', 'bandwidth', 'predom_freq')
-    features2D = ('ssam', 'sonogram', 'filterbank')
-    mlresults2D = ('autoencoder',)
-    mlresults1D = ('autoencoder_indicator', 'decision_tree', 'random_walk')
-    features = features1D + features2D + mlresults2D + mlresults1D
-    feat_dict = {'1D': features1D, '2D': features2D, 'ml2D': mlresults2D,
-                 'ml1D': mlresults1D, 'all': features}
-
-    def __init__(self, rootdir='/scratch/zizou/features',
-                 volcano=None, site=None, channel=None,
-                 interval='10min', 
-                 starttime=datetime.utcnow()-timedelta(seconds=600),
-                 endtime=datetime.utcnow()):
-
-        self.volcano = volcano
-        self.site = site
-        self.channel = channel
-        self.starttime = starttime
-        self.endtime = endtime
-        self.rootdir = rootdir
-        self.interval = interval
-
-    def __call__(self, feature, stack_length=None):
-        """
-        Request a particular feature
-
-        :param feature: Feature name
-        :type feature: str
-        :param stack_length: length of moving average in time
-        :type stack_length: str
-
-        """
-        if self.endtime <= self.starttime:
-            raise ValueError('Startime has to be smaller than endtime.')
-
-        logger.debug(f"Reading feature {feature} between {self.starttime} and {self.endtime}")
-        feature = feature.lower()
-        num_periods = None
-        if stack_length is not None:
-            valid_stack_units = ['W', 'D', 'H', 'T', 'min', 'S']
-            if not re.match(r'\d*\s*(\w*)', stack_length).group(1)\
-                   in valid_stack_units:
-                raise ValueError(
-                    'Stack length should be one of: {}'.
-                        format(', '.join(valid_stack_units))
-                )
-
-            if pd.to_timedelta(stack_length) < pd.to_timedelta(self.interval):
-                raise ValueError('Stack length {} is less than interval {}'.
-                                 format(stack_length, self.interval))
-
-            # Rewind starttime to account for stack length
-            self.starttime -= pd.to_timedelta(stack_length)
-
-            num_periods = (pd.to_timedelta(stack_length)/
-                           pd.to_timedelta(self.interval))
-            if not num_periods.is_integer():
-                raise ValueError(
-                    'Stack length {} / interval {} = {}, but it needs'
-                    ' to be a whole number'.
-                        format(stack_length, self.interval, num_periods))
-
-        if feature not in self.features:
-            raise ValueError('Feature {} does not exist.'.format(feature))
-
-        xd_index = dict(datetime=slice(self.starttime,
-                                       (self.endtime-
-                                        pd.to_timedelta(self.interval))))
-        filename = os.path.join(self.sitedir,
-                                '%s.nc' % feature)
-        with xr.open_dataset(filename, group='original', engine='h5netcdf') as ds:
-            ds.sortby("datetime")
-            rq = ds.loc[xd_index].load()
-
-        # Stack features
-
-        if stack_length is not None:
-            logger.debug("Stacking feature...")
-            try:
-                xdf = rq[feature].rolling(datetime=int(num_periods),
-                                        center=False,
-                                        min_periods=1).mean()
-                # Return requested timeframe to that defined in initialisation
-                self.starttime += pd.to_timedelta(stack_length)
-                xdf_new = xdf.loc[
-                        self.starttime:
-                        self.endtime-pd.to_timedelta(self.interval)]
-                xdf_new = xdf_new.rename(feature)
-            except ValueError as e:
-                logger.error(e)
-                logger.error('Stack length {} is not valid for feature {}'.
-                             format(stack_length, feature))
-            else:
-                return xdf_new
-
-        return rq[feature]
-
-    def get_starttime(self):
-        return self.__starttime
-
-    def set_starttime(self, time):
-        if time is None:
-            self.__starttime = None
-            self.__sdate = None
-            return
-        self.__starttime = time
-        self.__sdate = '{}{:02d}{:02d}'.format(time.year,
-                                               time.month,
-                                               time.day)
-
-    def get_endtime(self):
-        return self.__endtime
-
-    def set_endtime(self, time):
-        if time is None:
-            self.__endtime = None
-            self.__edate = None
-            return
-        self.__endtime = time
-        self.__edate = '{}{:02d}{:02d}'.format(time.year,
-                                               time.month,
-                                               time.day)
-
-    def get_volcano(self):
-        return self.__volcano
-
-    def set_volcano(self, value):
-        self.__volcano = value
-
-    def get_site(self):
-        return self.__site
-
-    def set_site(self, value):
-        self.__site = value
-
-    def get_channel(self):
-        return self.__channel
-
-    def set_channel(self, value):
-        self.__channel = value
-
-    @property
-    def sitedir(self):
-        try:
-            return os.path.join(self.rootdir,
-                                self.volcano,
-                                self.site,
-                                self.channel)
-        except TypeError:
-            return None
-
-    starttime = property(get_starttime, set_starttime)
-    endtime = property(get_endtime, set_endtime)
-    volcano = property(get_volcano, set_volcano)
-    site = property(get_site, set_site)
-    channel = property(get_channel, set_channel)
 
 
 class VolcanoMetadata:
