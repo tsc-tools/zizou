@@ -27,7 +27,8 @@ dependencies = [
     "obspy",
     "tqdm",
     "xarray[io]",
-    "pyyaml"
+    "pyyaml",
+    "tonik"
 ]
 
 [project.optional-dependencies]

@@ -13,7 +13,7 @@ import sklearn.decomposition
 import xarray as xr
 
 from zizou import AnomalyDetectionBaseClass, get_data
-from zizou.data import FeatureRequest, VolcanoMetadata
+from zizou.data import VolcanoMetadata
 
 
 logger = logging.getLogger(__name__)

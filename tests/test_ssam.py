@@ -7,6 +7,7 @@ import warnings
 import numpy as np
 from obspy import Trace, UTCDateTime
 from scipy.signal import find_peaks
+from tonik import StorageGroup
 import xarray as xr
 
 from zizou.ssam import SSAM
@@ -104,7 +105,9 @@ class SSAMTestCase(unittest.TestCase):
         nsec = 86500 # Slightly longer than 24 h to avoid rounding issues
         step = 3600
         tr = test_signal(nsec=nsec, starttime=starttime, gaps=True)
-
+        sg = StorageGroup('test', self.outdir, starttime=starttime.datetime,
+                          endtime=(starttime + nsec).datetime)
+        store = sg.get_store('WIZ', '00', 'HHZ')
         startwin = starttime
         while True:
             endwin = startwin + step
@@ -113,14 +116,12 @@ class SSAMTestCase(unittest.TestCase):
             ntr = tr.slice(startwin, endwin)
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                s.compute(ntr)
-            s.save(self.outdir)
+                store.save(s.compute(ntr))
             startwin = endwin
 
-        xdf = xr.open_dataset(os.path.join(self.outdir, 'ssam.nc'),
-                              group='original')
-        self.assertEqual(xdf.ssam.data.shape, (251, 144))
-        peaks = find_peaks(xdf['ssam'].data[:, 0], height=1e-1)[0]
+        ssam = store('ssam')
+        self.assertEqual(ssam.shape, (251, 144))
+        peaks = find_peaks(ssam.data[:, 0], height=1e-1)[0]
         np.testing.assert_array_almost_equal(linfreqs[peaks],
                                              testpeaks, 2)
 

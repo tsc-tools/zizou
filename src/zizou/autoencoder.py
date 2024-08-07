@@ -245,23 +245,23 @@ class AutoEncoder(AnomalyDetectionBaseClass):
         logger.info(f"Test loss: {test_loss:>8f} \n")
         return test_loss
  
-    def fit(self, fq):
+    def fit(self, store):
         autoencoder_ = TiedAutoEncoder(14, self.layers_)
         self.model_ = autoencoder_.to(self.device_)
         logger.info(self.model_)
         try:
-            self.model_.load_state_dict(torch.load(os.path.join(fq.sitedir, self.files['modelfile'])))
-            with open(os.path.join(fq.sitedir, self.files['scalermodelfile']), 'rb') as fh:
+            self.model_.load_state_dict(torch.load(os.path.join(store.path, self.files['modelfile'])))
+            with open(os.path.join(store.path, self.files['scalermodelfile']), 'rb') as fh:
                 self.transformer = pickle.load(fh)
             self._is_fitted = True
             logging.info("Loaded pretrained model.")
         except FileNotFoundError:
             optimizer = torch.optim.SGD(self.model_.parameters(), lr=1e-3)
-            data = self.get_features(fq, os.path.join(fq.sitedir, self.files['featurefile'])).values
+            data = self.get_features(store, os.path.join(store.path, self.files['featurefile'])).values
             logger.info(f"Scaling features for dataset with shape {data.shape}")
             # Scale values and fill gaps.
             data_norm = self.transformer.fit_transform(data)
-            with open(os.path.join(fq.sitedir, self.files['scalermodelfile']), 'wb') as fh:
+            with open(os.path.join(store.path, self.files['scalermodelfile']), 'wb') as fh:
                 pickle.dump(self.transformer, fh)
             logger.info("Splitting dataset...")
             data_norm_train, data_norm_test = train_test_split(data_norm,
@@ -281,15 +281,15 @@ class AutoEncoder(AnomalyDetectionBaseClass):
                 if loss < best_loss:
                     best_loss = loss
                     best_epoch = i
-                    self.checkpoint(self.model_, os.path.join(fq.sitedir, self.files['modelfile'])) 
+                    self.checkpoint(self.model_, os.path.join(store.path, self.files['modelfile'])) 
                 elif i - best_epoch > self.patience_:
                     logger.info(f"Early stopped training at epoch {i+1}")
                     break
             self._is_fitted = True
 
-    def transform(self, fq, cluster=True):
+    def transform(self, store, cluster=True):
         assert self._is_fitted
-        feats = self.get_features(fq)
+        feats = self.get_features(store)
         dates = feats['datetime']
         data = feats.values
         data_norm = self.transformer.transform(data)
@@ -302,8 +302,8 @@ class AutoEncoder(AnomalyDetectionBaseClass):
         encoded_data = encoded_data.cpu().numpy()
         if cluster:
             clustered_data = self.cluster_.fit_transform(encoded_data,
-                                                         os.path.join(fq.sitedir, self.files['scalerfile']),
-                                                         os.path.join(fq.sitedir, self.files['clustercenterfile']))
+                                                         os.path.join(store.path, self.files['scalerfile']),
+                                                         os.path.join(store.path, self.files['clustercenterfile']))
             cluster_names = list(range(self.cluster_.n_clusters_))
             xda = xr.DataArray(clustered_data,
                                 coords=[cluster_names, dates],
@@ -315,7 +315,7 @@ class AutoEncoder(AnomalyDetectionBaseClass):
                            dims=['autodim', 'datetime'])
         return xr.Dataset({'autoencoder': xda})
 
-    def fit_transform(self, fq, cluster=True):
-        self.fit(fq)
-        self.classifications = self.transform(fq, cluster=cluster)
+    def fit_transform(self, store, cluster=True):
+        self.fit(store)
+        self.classifications = self.transform(store, cluster=cluster)
         return self.classifications

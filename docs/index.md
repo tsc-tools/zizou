@@ -1,15 +1,24 @@
 # Zizou: time-series classification tools for Geoscience
 
-Detecting unusual patterns in geo-monitoring data is a common task in geohazard monitoring. While the types of patterns can be very different between, for example, volcanic unrest and submarine landslides, the methodologies to detect these patterns are often very similar.
-A typical workflow can be broken down as follows:
+Zizou is a package to provide common tools for time-series classification in Geoscience. For example,
+it allows you to download seismic data from an S3 bucket or an FDSN server, compute spectrograms, and then
+use an Autoencoder to detect anomalies in the spectrograms.
 
-1.	Access waveform and sensor meta data.
-2.	Divide continuous data into fixed-size windows.
-3.	Compute features for each window such as statistical properties or spectrograms.
-4.	Detect patterns in the feature time-series. This can be either done in a supervised (e.g. patterns preceding an eruption) or unsupervised fashion (e.g. cluster analysis).
-5.	Visualise features and patterns on an interactive dashboard that updates as new data becomes available.
+## Requirements
+* xarray
+* boto3
+* pandas
+* numpy
+* scipy
+* obspy
+* tqdm
+* xarray
+* pyyaml
+* tonik
 
-Zizou implements this workflow using modern, open-source Data Science tools. Several common features (e.g., spectrograms) and pattern recognition algorithms (e.g., deep autoencoders) are already part of the toolbox. More importantly, the toolbox was designed with extensibility in mind. Our long-term objective is to make zizou a platform for evaluating new algorithms for seismo-acoustic monitoring.
+Using the machine learning modules requires the following additional packages:
+* scikit-learn
+* pytorch 
 
 ## Installation
 To only compute features run:
@@ -23,6 +32,7 @@ To also use the machine learning modules run:
 ```
 pip install -U "zizou[ML]"
 ```
+
 ### Installation from source
 #### Setup conda environment
 

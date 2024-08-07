@@ -10,7 +10,7 @@ import pandas as pd
 import xarray as xr
 
 from zizou.rsam import RSAM, EnergyExplainedByRSAM
-from zizou.data import DataSource
+from zizou.data import DataSource, FDSNWaveforms
 
 
 class RSAMTestCase(unittest.TestCase):
@@ -56,65 +56,16 @@ class RSAMTestCase(unittest.TestCase):
             df1['rsam'].values, np.r_[np.nan, np.nan, np.ones(8)], 2
         )
 
-    def test_append(self):
-        """
-        Test appending new data to existing output files.
-        """
-
-        starttime1 = UTCDateTime('2019-08-14T01:00:00')
-        endtime1 = UTCDateTime('2019-08-14T01:20:00')
-        starttime2 = endtime1
-        endtime2 = UTCDateTime('2019-08-14T01:40:00')
-
-        tr = self.test_signal(starttime=starttime1)
-        tr1 = tr.copy().trim(starttime1, endtime1)
-        tr2 = tr.copy().trim(starttime2, endtime2)
-        tr2.data *= 2
-        # hack to make test results consistent
-        # necessary because time windows overlap
-        tr1.data[-1] *= 2
-        tr3 = tr1.__add__(tr2, method=1)
-        r1 = RSAM(interval=600, filtertype=None)
-        r2 = RSAM(interval=600, filtertype=None)
-        r3 = RSAM(interval=600, filtertype=None)
-
-        _ = r1.compute(tr1)
-        r1.save(self.tempdir1)
-
-        _ = r2.compute(tr2)
-        r2.save(self.tempdir1)
-
-        _ = r3.compute(tr3)
-        r3.save(self.tempdir2)
-
-        file1 = os.path.join(self.tempdir1, 'rsam.nc')
-        file2 = os.path.join(self.tempdir2, 'rsam.nc')
-        ds1 = xr.open_dataset(file1, group='original')
-        ds2 = xr.open_dataset(file2, group='original')
-        np.testing.assert_array_equal(ds1['datetime'],
-                                      ds2['datetime'])
-        np.testing.assert_array_equal(ds1['rsam'],
-                                      ds2['rsam'])
-
-        # test overlapping time windows
-        tr4 = tr.copy().trim(starttime1, endtime2)
-        r4 = RSAM(interval=600, filtertype=None)
-        _ = r4.compute(tr4)
-        r4.save(self.tempdir3)
-        r2.save(self.tempdir3)
-        file3 = os.path.join(self.tempdir3, 'rsam.nc')
-        ds3 = xr.open_dataset(file3, group='original')
-        np.testing.assert_array_equal(ds3['rsam'].values.astype(int),
-                                      np.array([1, 1, 2, 2]))
-
 
 class EnergyExplainedByRSAMTestCase(unittest.TestCase):
 
     def setUp(self):
         self.data_dir = os.path.join(os.path.dirname(os.path.abspath(
             inspect.getfile(inspect.currentframe()))), "data")
+        fdsnc = FDSNWaveforms(url='https://service.geonet.org.nz',
+                              fill_value='interpolate')
         stream = 'WIZ.10.HHZ.NZ'
-        ds = DataSource(sources=('fdsn',), fill_value='interpolate')
+        ds = DataSource(clients=[fdsnc])
         # dates are inclusive, and complete days
         startdate = UTCDateTime('2019-08-14')
         enddate = UTCDateTime('2019-08-15')

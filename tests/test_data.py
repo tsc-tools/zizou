@@ -269,8 +269,11 @@ class PostProcessingTestCase(unittest.TestCase):
         filename = inspect.getfile(inspect.currentframe())
         filedir = os.path.dirname(os.path.abspath(filename))
         self.sds_dir = os.path.join(filedir, "data", "sds_test")
-        self.ds = DataSource(sources=('sds',), sds_dir=self.sds_dir,
-                             staxml_dir=self.sds_dir)
+        fdsn_urls=('https://service.geonet.org.nz',
+                   'https://service-nrt.geonet.org.nz')
+        sdsc = SDSWaveforms(sds_dir=self.sds_dir, fdsn_urls=fdsn_urls,
+                            staxml_dir=self.sds_dir, fill_value=np.nan)
+        self.ds = DataSource(clients=[sdsc])
 
     def test_function_list(self):
         """

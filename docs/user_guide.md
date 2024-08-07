@@ -32,8 +32,7 @@ from obspy import UTCDateTime
 import numpy as np
 import os 
 
-sds_dir = "/tmp/sds/seismic"
-ds = DataSource(sds_dir=sds_dir, sources=["mock"], chunk_size=86400)
+ds = DataSource(clients=[waveform_gen], chunk_size=86400)
 
 # Instantiate Features 
 rsam = RSAM(filtertype='bandpass', filterfreq=(1, 4.9))
@@ -57,27 +56,21 @@ for tr in ds.get_waveforms(net="NZ", site="WIZ", loc="10", comp="HHZ", start=UTC
         feat.save(h5FileName=feature_dir)
 ```
 
-Once features have been computed we can request them using the `FeatureRequest` class:
+Once features have been computed we can request them using `tonik`'s `StorageGroup` class:
 
 ```python
 import matplotlib.pyplot as plt 
-from vumt.data import FeatureRequest
+from tonik import StorageGroup
 import datetime
 
 starttime = datetime.datetime(2024, 5, 10)
 endtime = datetime.datetime(2024, 6, 1)
+sg = StorageGroup('Whakaari', '/tmp/vumt/features',
+                  starttime=starttime, endtime=endtime)
+store = sg.get_store(site="WIZ", sensor="00", channel="HHZ")
 
-feature_req = FeatureRequest(
-    rootdir="/tmp/vumt/features",
-    volcano="Whakaari", 
-    site="WIZ", 
-    channel="HHZ", 
-    starttime=starttime, 
-    endtime=endtime
-)
-
-rsam = feature_req("rsam")
-ssam = feature_req("ssam")
+rsam = store("rsam")
+ssam = store("ssam")
 print(rsam)
 fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 5), sharex=True)
 ax1.plot(rsam.coords["datetime"], rsam.data)
@@ -94,32 +87,24 @@ python3 -m pip install -U "zizou[ML]"
 
 Here we train an autoencoder with fuzzy clustering of the embeddings:
 ```python
-from vumt.autoencoder import AutoEncoder
-from vumt.data import FeatureRequest
+from zizou.autoencoder import AutoEncoder
 
-config = {"AUTOENCODER": 
-    {"layers": "2000,500,200,6",
-     "epochs": 1,
-     "patience": 5
-     }
-}
+config = """
+autoencoder: 
+    layers: [2000,500,200,6]
+    epochs: 1
+    patience: 5
+"""
 model = AutoEncoder(config)
 
 # Create the Feature Request
 starttime = datetime.datetime(2024, 5, 1)
 endtime = datetime.datetime(2024, 6, 1)
-
-feature_req = FeatureRequest(
-    rootdir="/tmp/vumt/features",
-    volcano="Whakaari", 
-    site="WIZ", 
-    channel="HHZ", 
-    starttime=starttime, 
-    endtime=endtime
-)
+store.starttime = starttime
+store.endtime = endtime
 
 # -- Train the Auto-Encoder and save the model (this might take a while)
-model.fit_transform(feature_req)
-print(feature_req.sitedir)
-model.save(feature_req.sitedir)
+classifications = model.fit_transform(store)
+print(store.path)
+store.save(classifications)
 ```

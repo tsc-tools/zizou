@@ -90,19 +90,3 @@ class AnomalyDetectionBaseClass(object):
             if featurefile is not None:
                 feats.to_netcdf(featurefile)
         return feats.transpose('datetime', 'variable')
-
-    def save(self, savedir: str):
-        """
-        Save data to disk as netcdf4 files. Filenames will
-        be 'YYYYMMDD_{sitename}.nc' where the date is taking
-        from the xarray attributes 'starttime' and 'endtime'.
-
-        :param savedir: Directory to save files to.
-        :type savedir: str
-        """
-        if self.classifications is None:
-            msg = "No classifications found."
-            raise TypeError(msg)
-
-        xarray2hdf5(self.classifications, savedir)
-
