@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>Introduction on how to use zizou - Zizou</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+        <link href="../assets/_mkdocstrings.css" rel="stylesheet" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "Introduction on how to use zizou";
+        var mkdocs_page_input_path = "user_guide.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> Zizou
+        </a>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">Home</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="./">Introduction on how to use zizou</a>
+                </li>
+              </ul>
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../api/">API</a>
+                </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">Zizou</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+      <li class="breadcrumb-item active">Introduction on how to use zizou</li>
+    <li class="wy-breadcrumbs-aside">
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="introduction-on-how-to-use-zizou">Introduction on how to use zizou</h1>
+<p>We start by creating a dummy dataset that we can use for testing later on:</p>
+<pre><code class="language-python">from zizou.data import MockSDSWaveforms
+from obspy import UTCDateTime
+
+# SDS directory to store dummy data as MiniSEED
+sds_dir = &quot;/tmp/sds/seismic&quot;
+waveform_gen = MockSDSWaveforms(sds_dir=sds_dir)
+st = waveform_gen.get_waveforms(net=&quot;NZ&quot;, site=&quot;WIZ&quot;, loc=&quot;10&quot;, comp=&quot;HHZ&quot;, startdate=UTCDateTime(&quot;2024-05-01&quot;), enddate=UTCDateTime(&quot;2024-06-01&quot;))
+</code></pre>
+<p>This data can now be loaded and plotted with <code>obspy</code> like any regular seismic data:</p>
+<pre><code class="language-python">from obspy.clients.filesystem.sds import Client as SDS_Client
+client = SDS_Client(sds_dir)
+st = client.get_waveforms(&quot;NZ&quot;, &quot;WIZ&quot;, &quot;10&quot;, &quot;HHZ&quot;, UTCDateTime(&quot;2024-05-01&quot;), UTCDateTime(&quot;2024-06-01&quot;))
+_ = st.plot()
+</code></pre>
+<p>Next we will compute a few typical seismic features:</p>
+<pre><code class="language-python">from zizou.dsar import DSAR
+from zizou.rsam import RSAM, EnergyExplainedByRSAM
+from zizou.ssam import SSAM
+from zizou.spectral_features import SpectralFeatures
+from zizou.data import DataSource
+from obspy import UTCDateTime
+
+import numpy as np
+import os 
+
+ds = DataSource(clients=[waveform_gen], chunk_size=86400)
+
+# Instantiate Features 
+rsam = RSAM(filtertype='bandpass', filterfreq=(1, 4.9))
+rsam_energy_prop = EnergyExplainedByRSAM(filterfreq_wb=(0.5, 4.99))
+ssam = SSAM(
+    frequencies=np.linspace(0, 4.99, 10),
+    timestamp=&quot;start&quot;, 
+    resample_int=(None, &quot;10min&quot;)
+)
+dsar = DSAR(lowerfreqband=(0.1, 2.5), higherfreqband=(2.5, 4.99))
+spec = SpectralFeatures()
+
+feature_dir = &quot;/tmp/vumt/features/Whakaari/WIZ/HHZ&quot;
+if not os.path.isdir(feature_dir):
+    os.makedirs(feature_dir)
+
+for tr in ds.get_waveforms(net=&quot;NZ&quot;, site=&quot;WIZ&quot;, loc=&quot;10&quot;, comp=&quot;HHZ&quot;, start=UTCDateTime(&quot;2024-05-01&quot;), end=UTCDateTime(&quot;2024-06-01&quot;)):
+    print(tr)
+    for feat in (rsam, rsam_energy_prop, ssam, dsar, spec):
+        feat.compute(trace=tr)
+        feat.save(h5FileName=feature_dir)
+</code></pre>
+<p>Once features have been computed we can request them using <code>tonik</code>'s <code>StorageGroup</code> class:</p>
+<pre><code class="language-python">import matplotlib.pyplot as plt 
+from tonik import StorageGroup
+import datetime
+
+starttime = datetime.datetime(2024, 5, 10)
+endtime = datetime.datetime(2024, 6, 1)
+sg = StorageGroup('Whakaari', '/tmp/vumt/features',
+                  starttime=starttime, endtime=endtime)
+store = sg.get_store(site=&quot;WIZ&quot;, sensor=&quot;00&quot;, channel=&quot;HHZ&quot;)
+
+rsam = store(&quot;rsam&quot;)
+ssam = store(&quot;ssam&quot;)
+print(rsam)
+fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 5), sharex=True)
+ax1.plot(rsam.coords[&quot;datetime&quot;], rsam.data)
+ax1.set_ylabel(&quot;RSAM&quot;)
+ax2.imshow(ssam.data, extent=[rsam.coords[&quot;datetime&quot;][0].values, rsam.coords[&quot;datetime&quot;][-1].values, 0, 5])
+ax2.set_aspect(&quot;auto&quot;)
+ax2.set_ylabel(&quot;SSAM&quot;)
+</code></pre>
+<p>Finally we can run some of the machine learning algorithm for anomaly detection. Note, that these depend on the <a href="">scikit-learn</a> and <a href="">pytorch</a> packages. You can install these dependencies by running:</p>
+<pre><code>python3 -m pip install -U &quot;zizou[ML]&quot;
+</code></pre>
+<p>Here we train an autoencoder with fuzzy clustering of the embeddings:</p>
+<pre><code class="language-python">from zizou.autoencoder import AutoEncoder
+
+config = &quot;&quot;&quot;
+autoencoder: 
+    layers: [2000,500,200,6]
+    epochs: 1
+    patience: 5
+&quot;&quot;&quot;
+model = AutoEncoder(config)
+
+# Create the Feature Request
+starttime = datetime.datetime(2024, 5, 1)
+endtime = datetime.datetime(2024, 6, 1)
+store.starttime = starttime
+store.endtime = endtime
+
+# -- Train the Auto-Encoder and save the model (this might take a while)
+classifications = model.fit_transform(store)
+print(store.path)
+store.save(classifications)
+</code></pre>
+              
+            </div>
+          </div><footer>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+    
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>
