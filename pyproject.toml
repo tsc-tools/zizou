@@ -32,7 +32,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-ml = ["scikit-learn", "pytorch"]
+ml = ["scikit-learn", "torch", "torchvision", "torchaudio"]
 
 [project.urls]
 Homepage = "https://github.com/SAM-Toolbox/tsctools"
