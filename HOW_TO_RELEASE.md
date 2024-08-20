@@ -22,30 +22,19 @@ python3 -m twine upload dist/*
 When prompted for the username enter `__token__` and paste in your pypi token as the password.
 
 ## Documentation
-Install the [mkdocs](https://www.mkdocs.org/) package and the [mkdocstrings](https://mkdocstrings.github.io/) plugin:
+Install the [mkdocs](https://www.mkdocs.org/) package as well as the [mkdocstrings](https://mkdocstrings.github.io/) 
+and the [mkdocs-jupyter](https://github.com/danielfrg/mkdocs-jupyter) plugins:
 ```
-python3 -m pip install --upgrade mkdocs "mkdocstrings[python]"
+python3 -m pip install --upgrade mkdocs "mkdocstrings[python]" mkdocs-jupyter
 ```
 
-To view the documentation locally run:
+To view the documentation locally on port 8000 run:
 ```
-mkdocs serve
+mkdocs serve -a 0.0.0.0:8000
 ```
-To generate documentation run:
-```
-mkdocs build
-```
-from the project root directory. This creates a directory called `site` containing all the necessary files to host the documentation.
-Please don't add `site` to version control. If it is the first time you built the documentation, run the following:
+To publish the documentation to [Github pages](https://pages.github.com/) run:
 
 ```
-mv site ../tsc-tools-website
-cd ../tsc-tools-website
-git init
-git add .
-git commit -m "update documentation"
-git branch -m main
-git add origin git@github.com:tsc-tools/zizou.github.io.git
-git push -u --force origin main
+mkdocs gh-deploy -r origin
 ```
-[Github pages](https://pages.github.com/) will then publish the documentation under https://tsc-tools.github.io.
+where origin is the remote name that you have given to the github repo. This will then publish the documentation under https://tsc-tools.github.io/zizou.
