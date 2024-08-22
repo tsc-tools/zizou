@@ -83,10 +83,11 @@ def setup_ac(setup):
                       starttime=tstart, 
                       endtime=tstart + timedelta(days=ndays))
     s_wiz = sg.get_store('WIZ', '00', 'HHZ')
+    s_wsrz = sg.get_store('WSRZ', '00', 'HHZ')
     config = """ 
     autoencoder:
       layers: [2000,500,200,6]
       epochs: 5
       patience: 10
     """
-    return savedir, s_wiz, config
+    return savedir, s_wiz, s_wsrz, config
