@@ -199,12 +199,14 @@ class AutoEncoder(AnomalyDetectionBaseClass):
                         if torch.backends.mps.is_available()
                         else 'cpu')
         logger.info(f"Using {self.device_} device") 
-        self._is_fitted = False
         imputer = SimpleImputer(missing_values=np.nan, strategy='median')
         scaler = MinMaxScaler()
         self.transformer = make_pipeline(imputer, scaler)
         self.cluster_ = FuzzyCluster()
         self.classifications = None
+        autoencoder_ = TiedAutoEncoder(14, self.layers_)
+        self.model_ = autoencoder_.to(self.device_)
+        logger.info(self.model_)
    
     def checkpoint(self, model, filename):
         torch.save(model.state_dict(), filename)
@@ -244,51 +246,52 @@ class AutoEncoder(AnomalyDetectionBaseClass):
         self.loss_ = test_loss
         logger.info(f"Test loss: {test_loss:>8f} \n")
         return test_loss
- 
-    def fit(self, store):
-        autoencoder_ = TiedAutoEncoder(14, self.layers_)
-        self.model_ = autoencoder_.to(self.device_)
-        logger.info(self.model_)
+
+    def _is_fitted(self, store):
         try:
             self.model_.load_state_dict(torch.load(os.path.join(store.path, self.files['modelfile'])))
             with open(os.path.join(store.path, self.files['scalermodelfile']), 'rb') as fh:
                 self.transformer = pickle.load(fh)
-            self._is_fitted = True
             logging.info("Loaded pretrained model.")
         except FileNotFoundError:
-            optimizer = torch.optim.SGD(self.model_.parameters(), lr=1e-3)
-            data = self.get_features(store, os.path.join(store.path, self.files['featurefile'])).values
-            logger.info(f"Scaling features for dataset with shape {data.shape}")
-            # Scale values and fill gaps.
-            data_norm = self.transformer.fit_transform(data)
-            with open(os.path.join(store.path, self.files['scalermodelfile']), 'wb') as fh:
-                pickle.dump(self.transformer, fh)
-            logger.info("Splitting dataset...")
-            data_norm_train, data_norm_test = train_test_split(data_norm,
-                                                            test_size=.2,
-                                                            train_size=.8)
-            train_data = VUMTData(data_norm_train, transform=torch.from_numpy)
-            test_data = VUMTData(data_norm_test, transform=torch.from_numpy)
-            train_dataloader = DataLoader(train_data, batch_size=64, shuffle=True)
-            test_dataloader = DataLoader(test_data, batch_size=64, shuffle=True)
-            logger.info("Starting training...")
-            best_loss = 1e30
-            best_epoch = 0
-            for i in range(self.epochs_):
-                logger.info(f"Epoch {i+1}")
-                self.train(train_dataloader, optimizer)
-                loss = self.test(test_dataloader, self.model_.loss)
-                if loss < best_loss:
-                    best_loss = loss
-                    best_epoch = i
-                    self.checkpoint(self.model_, os.path.join(store.path, self.files['modelfile'])) 
-                elif i - best_epoch > self.patience_:
-                    logger.info(f"Early stopped training at epoch {i+1}")
-                    break
-            self._is_fitted = True
+            return False
+        return True
+ 
+    def fit(self, store):
+        if self._is_fitted(store):
+            return
+        optimizer = torch.optim.SGD(self.model_.parameters(), lr=1e-3)
+        data = self.get_features(store, os.path.join(store.path, self.files['featurefile'])).values
+        logger.info(f"Scaling features for dataset with shape {data.shape}")
+        # Scale values and fill gaps.
+        data_norm = self.transformer.fit_transform(data)
+        with open(os.path.join(store.path, self.files['scalermodelfile']), 'wb') as fh:
+            pickle.dump(self.transformer, fh)
+        logger.info("Splitting dataset...")
+        data_norm_train, data_norm_test = train_test_split(data_norm,
+                                                        test_size=.2,
+                                                        train_size=.8)
+        train_data = VUMTData(data_norm_train, transform=torch.from_numpy)
+        test_data = VUMTData(data_norm_test, transform=torch.from_numpy)
+        train_dataloader = DataLoader(train_data, batch_size=64, shuffle=True)
+        test_dataloader = DataLoader(test_data, batch_size=64, shuffle=True)
+        logger.info("Starting training...")
+        best_loss = 1e30
+        best_epoch = 0
+        for i in range(self.epochs_):
+            logger.info(f"Epoch {i+1}")
+            self.train(train_dataloader, optimizer)
+            loss = self.test(test_dataloader, self.model_.loss)
+            if loss < best_loss:
+                best_loss = loss
+                best_epoch = i
+                self.checkpoint(self.model_, os.path.join(store.path, self.files['modelfile'])) 
+            elif i - best_epoch > self.patience_:
+                logger.info(f"Early stopped training at epoch {i+1}")
+                break
 
     def transform(self, store, cluster=True):
-        assert self._is_fitted
+        assert self._is_fitted(store)
         feats = self.get_features(store)
         dates = feats['datetime']
         data = feats.values
