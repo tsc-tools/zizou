@@ -7,7 +7,11 @@
 		"context": "..",
 		// Update the 'dockerFile' property if you aren't using the standard 'Dockerfile' filename.
 		"dockerfile": "../Dockerfile",
-		"target": "dev"
+		"target": "dev",
+		"args": { 
+			"D_UID": "${localEnv:D_UID}",
+			"D_GID": "${localEnv:D_GID}"
+		}
 	},
 
 	// Features to add to the dev container. More info: https://containers.dev/features.
@@ -29,7 +33,4 @@
 			]
 		}
 	}
-
-	// Uncomment to connect as an existing user other than the container default. More info: https://aka.ms/dev-containers-non-root.
-	// "remoteUser": "devcontainer"
 }
