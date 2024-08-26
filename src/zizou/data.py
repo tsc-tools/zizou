@@ -463,7 +463,7 @@ class S3Waveforms(WaveformBaseclass):
 
 class DataSource:
 
-    def __init__(self, clients, chunk_size=None):
+    def __init__(self, clients, chunk_size=None, cache_dir=None):
         self.chunk_size = chunk_size
         
         if len(clients) < 1:
@@ -477,8 +477,38 @@ class DataSource:
                 raise ValueError(msg)
 
         self.clients = clients
+        self.cache_dir = os.path.join(os.environ['HOME'], 'zizou_cache')
+        if cache_dir is not None:
+            self.cache_dir = cache_dir
 
-    def get_waveforms(self, net, site, loc, comp, start, end):
+        os.makedirs(self.cache_dir, exist_ok=True)
+        self.cache_client = SDS_Client(self.cache_dir)
+
+    def to_sds(self, tr: Trace):
+        """
+        Save trace to SDS directory.
+        """
+        start = tr.stats.starttime
+        end = tr.stats.endtime
+        sds_fmtstr = os.path.join(
+            "{year}", "{network}", "{station}", "{channel}.{sds_type}",
+            "{network}.{station}.{location}.{channel}.{sds_type}.{year}.{doy:03d}")
+
+        current_date = start.date
+        while current_date <= end.date:
+            _tr = tr.slice(UTCDateTime(current_date), UTCDateTime(current_date) + 86400)
+            # print(_tr.stats.starttime, _tr.stats.endtime)
+            fullpath = sds_fmtstr.format(year=_tr.stats.starttime.year,
+                                        doy=_tr.stats.starttime.julday,
+                                        sds_type="D", **_tr.stats)
+            fullpath = os.path.join(self.cache_dir, fullpath)
+            dirname, _ = os.path.split(fullpath)
+            os.makedirs(dirname, exist_ok=True)
+            logger.debug(f"writing {_tr} to {fullpath}")
+            _tr.write(fullpath, format="MSEED")
+            current_date += timedelta(days=1)
+
+    def get_waveforms(self, net, site, loc, comp, start, end, cache=False):
         t_start = start
         t_end = end 
         if self.chunk_size is not None:
@@ -486,18 +516,33 @@ class DataSource:
             t_end = min(t_end, end)
         while t_end <= end:
             tr = Trace()
-            for client in self.clients:
-                try:
-                    tr = client.get_waveforms(net, site, loc, comp, t_start, t_end)
-                except Exception as e:
-                    logger.info(e)
-                    continue
+            try:
+                # First check the cache
+                st = self.cache_client.get_waveforms(net, site, loc, comp, t_start,
+                                                    t_end, dtype='float64')
+                tr = st.merge(fill_value=np.nan)[0]
+                t_diff = int(t_end - t_start)
+                if abs(t_diff - (tr.stats.npts - 1)*tr.stats.delta) > 1:
+                    raise IndexError
+                tr.stats['cached'] = True
+            except (IndexError, AttributeError) as e:
+                msg = "Data for {} between {} and {} not found in cache."
+                logger.debug(msg.format('.'.join((net, site, loc, comp)),
+                                        t_start, t_end))
+                for client in self.clients:
+                    try:
+                        tr = client.get_waveforms(net, site, loc, comp, t_start, t_end)
+                    except Exception as e:
+                        logger.info(e)
+                        continue
+                    else:
+                        break
+                if not tr:
+                    msg = "No data found for {}"
+                    logger.error(msg.format('.'.join((net, site, loc, comp))))
                 else:
-                    break
-            if not tr:
-                msg = "No data found for {}"
-                logger.error(msg.format('.'.join((net, site, loc, comp))))
-            
+                    if cache:
+                        self.to_sds(tr)
             yield tr
 
             if self.chunk_size is not None:

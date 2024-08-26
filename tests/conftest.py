@@ -11,23 +11,30 @@ from zizou.util import generate_test_data, xarray2hdf5
 
 def pytest_addoption(parser):
     parser.addoption(
+        "--runwebservice", action="store_true", default=False, help="run webservice tests"
+    )
+    parser.addoption(
         "--runslow", action="store_true", default=False, help="run slow tests"
     )
 
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "slow: mark test as slow to run")
+    config.addinivalue_line("markers", "webservice: mark tests that request data from webservices")
 
 
 def pytest_collection_modifyitems(config, items):
-    if config.getoption("--runslow"):
-        # --runslow given in cli: do not skip slow tests
-        return
-    skip_slow = pytest.mark.skip(reason="need --runslow option to run")
-    for item in items:
-        if "slow" in item.keywords:
-            item.add_marker(skip_slow)
-
+    if not config.getoption("--runwebservice"):
+        skip_webservice = pytest.mark.skip(reason="need --runwebservice option to run")
+        for item in items:
+             if "webservice" in item.keywords:
+                item.add_marker(skip_webservice)
+    if not config.getoption("--runslow"):
+        skip_slow = pytest.mark.skip(reason="need --runslow option to run")
+        for item in items:
+            if "slow" in item.keywords:
+                item.add_marker(skip_slow)
+   
 
 tstart = datetime(2023,1,1,0,0,0)
 ndays = 10
@@ -91,3 +98,11 @@ def setup_ac(setup):
       patience: 10
     """
     return savedir, s_wiz, s_wsrz, config
+
+
+@pytest.fixture(scope='module')
+def setup_sds():
+    filename = inspect.getfile(inspect.currentframe())
+    filedir = os.path.dirname(os.path.abspath(filename))
+    return os.path.join(filedir, "data", "sds_test")
+
