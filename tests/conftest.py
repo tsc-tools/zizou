@@ -1,10 +1,12 @@
+import tarfile
 from datetime import datetime, timedelta
-import inspect
 import os
-from subprocess import Popen
 
+import numpy as np
 import pytest
+import requests
 from tonik import StorageGroup
+from zizou.data import SDSWaveforms, DataSource
 import yaml
 
 from zizou.util import generate_test_data, xarray2hdf5
@@ -100,9 +102,35 @@ def setup_ac(setup):
     return savedir, s_wiz, s_wsrz, config
 
 
+def download_and_extract_tar(url, extract_path):
+    # Download the tar file
+    response = requests.get(url, stream=True)
+    if response.status_code == 200:
+        with open('file.tar', 'wb') as f:
+            f.write(response.raw.read())
+
+        # Open the tar file
+        tar = tarfile.open('file.tar')
+
+        # Extract it
+        tar.extractall(path=extract_path)
+        tar.close()
+    else:
+        print(f"Failed to download {url}")
+
+
 @pytest.fixture(scope='module')
 def setup_sds():
-    filename = inspect.getfile(inspect.currentframe())
-    filedir = os.path.dirname(os.path.abspath(filename))
-    return os.path.join(filedir, "data", "sds_test")
+    test_data_dir = os.path.join(os.environ['HOME'], 'zizou_test_data')
+    os.makedirs(test_data_dir, exist_ok=True)
+    if not os.path.exists(os.path.join(test_data_dir, 'sds_test')):
+        url = "https://zenodo.org/records/13377159/files/zizou_test_data.tar.gz"
+        download_and_extract_tar(url, test_data_dir)
+    sds_dir = os.path.join(test_data_dir, "sds_test")
+    fdsn_urls=('https://service.geonet.org.nz',
+                'https://service-nrt.geonet.org.nz')
+    sdsc = SDSWaveforms(sds_dir=sds_dir, fdsn_urls=fdsn_urls,
+                        staxml_dir=sds_dir, fill_value=np.nan)
+    ds = DataSource(clients=[sdsc])
+    return sds_dir, ds 
 

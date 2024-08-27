@@ -57,7 +57,7 @@ def test_get_waveforms(setup_sds):
     Test that the waveforms returned from SDS and FDSNws are
     consistent.
     """
-    sds_dir = setup_sds
+    sds_dir, _ = setup_sds
     fdsn_urls=('https://service.geonet.org.nz',
                 'https://service-nrt.geonet.org.nz')
     sdsc = SDSWaveforms(sds_dir=sds_dir, fdsn_urls=fdsn_urls,
@@ -84,7 +84,7 @@ def test_with_gaps(setup_sds):
     """
     Test behaviour of traces with gaps.
     """
-    sds_dir = setup_sds
+    sds_dir, _ = setup_sds
     fdsn_urls=('https://service.geonet.org.nz',
                 'https://service-nrt.geonet.org.nz'),
     sdsc = SDSWaveforms(sds_dir=sds_dir, fdsn_urls=fdsn_urls,
@@ -124,7 +124,7 @@ def test_start_endtime(setup_sds):
     """
     Test that start and end times are what we expect.
     """
-    sds_dir = setup_sds
+    sds_dir, _ = setup_sds
     fdsn_urls=('https://service.geonet.org.nz',
                 'https://service-nrt.geonet.org.nz'),
     sdsc = SDSWaveforms(sds_dir=sds_dir, fdsn_urls=fdsn_urls,
@@ -158,7 +158,7 @@ def test_missing_station_metadata_sds(setup_sds):
     are available for the time periods where there are both station
     and waveform data, np.nan otherwise.
     """
-    sds_dir = setup_sds
+    sds_dir, _ = setup_sds
     fdsn_urls=('https://service.geonet.org.nz',
                 'https://service-nrt.geonet.org.nz')
     sdsc = SDSWaveforms(sds_dir=sds_dir, fdsn_urls=fdsn_urls,
@@ -186,7 +186,7 @@ def test_aws_backend(setup_sds):
     """
     Test retrieving waveform data from AWS S3.
     """
-    sds_dir = setup_sds
+    sds_dir, _ = setup_sds
     ### Setup virtual S3
     bucket_name = 'virtual-geonet-open-data'
     client = boto3.client('s3', region_name='us-east-1',
@@ -287,220 +287,206 @@ def test_caching():
     assert tr_chunked.stats.cached == True
     np.alltrue(tr_orig.slice(starttime, starttime + 86400.).data == tr_chunked.data)
 
-class PostProcessingTestCase(unittest.TestCase):
+"""
+Tests various permutations of station metadata availability e.g. at
+MAVZ:
+[Channel 'HHZ', Location '10',
+    Time range: 2012-05-22T02:00:00.000000Z - 2013-02-26T00:00:00.000000Z,
+    Channel 'HHZ', Location '10',
+    Time range: 2013-03-22T00:00:00.000000Z - 2013-04-09T22:15:00.000000Z,
+    Channel 'HHZ', Location '10',
+    Time range: 2013-04-10T00:15:00.000000Z - 2015-01-09T00:00:00.000000Z,
+    Channel 'HHZ', Location '10',
+    Time range: 2015-01-09T00:00:01.000000Z - 2017-04-20T22:00:00.000000Z,
+    Channel 'HHZ', Location '10',
+    Time range: 2017-04-20T22:00:02.000000Z - 9999-01-01T00:00:00.000000Z,
+]
+"""
+
+def test_function_list():
     """
-    Tests various permutations of station metadata availability e.g. at
-    MAVZ:
-    [Channel 'HHZ', Location '10',
-     Time range: 2012-05-22T02:00:00.000000Z - 2013-02-26T00:00:00.000000Z,
-     Channel 'HHZ', Location '10',
-     Time range: 2013-03-22T00:00:00.000000Z - 2013-04-09T22:15:00.000000Z,
-     Channel 'HHZ', Location '10',
-     Time range: 2013-04-10T00:15:00.000000Z - 2015-01-09T00:00:00.000000Z,
-     Channel 'HHZ', Location '10',
-     Time range: 2015-01-09T00:00:01.000000Z - 2017-04-20T22:00:00.000000Z,
-     Channel 'HHZ', Location '10',
-     Time range: 2017-04-20T22:00:02.000000Z - 9999-01-01T00:00:00.000000Z,
-    ]
+    Tests whether there is a matching number of tests and
+    post-processing functions
     """
-    def setUp(self):
-        filename = inspect.getfile(inspect.currentframe())
-        filedir = os.path.dirname(os.path.abspath(filename))
-        self.sds_dir = os.path.join(filedir, "data", "sds_test")
-        fdsn_urls=('https://service.geonet.org.nz',
-                   'https://service-nrt.geonet.org.nz')
-        sdsc = SDSWaveforms(sds_dir=self.sds_dir, fdsn_urls=fdsn_urls,
-                            staxml_dir=self.sds_dir, fill_value=np.nan)
-        self.ds = DataSource(clients=[sdsc])
+    pp = PostProcess()
+    check_names = [check_n for (check_n, check) in pp.checklist]
+    func_names = [func_n for (func_n, func) in pp.pp_functions]
+    # Check correct number of checks and output function
+    assert len(check_names) == len(func_names)
+    # Check checks and output functions match
+    for c, f in zip(check_names, func_names):
+        assert c.replace('check', 'output') == f
 
-    def test_function_list(self):
-        """
-        Tests whether there is a matching number of tests and
-        post-processing functions
-        """
-        pp = PostProcess()
-        check_names = [check_n for (check_n, check) in pp.checklist]
-        func_names = [func_n for (func_n, func) in pp.pp_functions]
-        # Check correct number of checks and output function
-        self.assertEqual(len(check_names), len(func_names))
-        # Check checks and output functions match
-        [self.assertEqual(c.replace('check', 'output'), f)
-         for (c, f) in zip(check_names, func_names)]
 
-    def test_case_single_trace_in_stream(self):
-        net, site, loc, comp = ('NZ', 'MAVZ', '10', 'HHZ')
-        startdate = UTCDateTime(2013, 2, 25)
-        enddate = UTCDateTime(2013, 2, 26)
-        st = self.ds.clients[0].client.get_waveforms(net, site, loc, comp, startdate,
-                                                     enddate, dtype='float64')
-        inv = read_inventory(os.path.join(self.sds_dir, 'MAVZ.xml'),
-                             format='STATIONXML')
-        inv_dt = inv.select(location=loc, channel=comp,
-                            starttime=startdate, endtime=enddate)
-        pp = PostProcess(st=st, inv=inv, inv_dt=inv_dt, loc=loc,
-                         comp=comp, fill_value=np.nan, startdate=startdate,
-                         enddate=enddate)
-        pp.run_checks()
-        # Check correct test case:
-        self.assertEqual(
-            [a[0] for (a, b) in zip(pp.checklist, pp.res) if b],
-            ["check_case_no_station_issues"]
-        )
-        self.assertEqual(
-            [a[0] for (a, b) in zip(pp.pp_functions, pp.res) if b],
-            ["output_case_no_station_issues"]
-        )
-        # Check output
-        test_st = st.copy()
-        test_st.attach_response(inv_dt)
-        test_st.remove_sensitivity()
-        test_st.trim(
-            starttime=startdate, endtime=enddate,
-            nearest_sample=False, pad=True, fill_value=np.nan
-        )
-        tr = pp.run_post_processing()
-        np.testing.assert_array_almost_equal(tr.data, test_st[0].data)
+def test_case_single_trace_in_stream(setup_sds):
+    sds_dir, ds = setup_sds
+    net, site, loc, comp = ('NZ', 'MAVZ', '10', 'HHZ')
+    startdate = UTCDateTime(2013, 2, 25)
+    enddate = UTCDateTime(2013, 2, 26)
+    st = ds.clients[0].client.get_waveforms(net, site, loc, comp, startdate,
+                                            enddate, dtype='float64')
+    inv = read_inventory(os.path.join(sds_dir, 'MAVZ.xml'),
+                            format='STATIONXML')
+    inv_dt = inv.select(location=loc, channel=comp,
+                        starttime=startdate, endtime=enddate)
+    pp = PostProcess(st=st, inv=inv, inv_dt=inv_dt, loc=loc,
+                        comp=comp, fill_value=np.nan, startdate=startdate,
+                        enddate=enddate)
+    pp.run_checks()
+    # Check correct test case:
+    for (a, b) in zip(pp.checklist, pp.res):
+        if b:
+            assert a[0] == "check_case_no_station_issues"
+    for (a, b) in zip(pp.pp_functions, pp.res):
+        if b:
+            assert a[0] == "output_case_no_station_issues"
+    # Check output
+    test_st = st.copy()
+    test_st.attach_response(inv_dt)
+    test_st.remove_sensitivity()
+    test_st.trim(
+        starttime=startdate, endtime=enddate,
+        nearest_sample=False, pad=True, fill_value=np.nan
+    )
+    tr = pp.run_post_processing()
+    np.testing.assert_array_almost_equal(tr.data, test_st[0].data)
 
-    def test_multiple_traces_in_stream(self):
-        net, site, loc, comp = ('NZ', 'MAVZ', '10', 'HHZ')
-        startdate = UTCDateTime(2012, 5, 23)
-        enddate = UTCDateTime(2012, 5, 24)
-        st = self.ds.clients[0].client.get_waveforms(net, site, loc, comp, startdate,
-                                                     enddate, dtype='float64')
-        inv = read_inventory(os.path.join(self.sds_dir, 'MAVZ.xml'),
-                             format='STATIONXML')
-        inv_dt = inv.select(location=loc, channel=comp,
-                            starttime=startdate, endtime=enddate)
-        pp = PostProcess(st=st, inv=inv, inv_dt=inv_dt, loc=loc,
-                         comp=comp, fill_value=np.nan, startdate=startdate,
-                         enddate=enddate)
-        pp.run_checks()
 
-        self.assertEqual(
-            [a[0] for (a, b) in zip(pp.checklist, pp.res) if b],
-            ["check_case_no_station_issues"]
-        )
-        self.assertEqual(
-            [a[0] for (a, b) in zip(pp.pp_functions, pp.res) if b],
-            ["output_case_no_station_issues"]
-        )
-        tr = pp.run_post_processing()
-        self.assertEqual(int(tr.stats.npts), int(8640000))
+def test_multiple_traces_in_stream(setup_sds):
+    sds_dir, ds = setup_sds
+    net, site, loc, comp = ('NZ', 'MAVZ', '10', 'HHZ')
+    startdate = UTCDateTime(2012, 5, 23)
+    enddate = UTCDateTime(2012, 5, 24)
+    st = ds.clients[0].client.get_waveforms(net, site, loc, comp, startdate,
+                                            enddate, dtype='float64')
+    inv = read_inventory(os.path.join(sds_dir, 'MAVZ.xml'),
+                         format='STATIONXML')
+    inv_dt = inv.select(location=loc, channel=comp,
+                        starttime=startdate, endtime=enddate)
+    pp = PostProcess(st=st, inv=inv, inv_dt=inv_dt, loc=loc,
+                        comp=comp, fill_value=np.nan, startdate=startdate,
+                        enddate=enddate)
+    pp.run_checks()
 
-    def test_case_stream_starttime_equals_channel_endtime(self):
-        net, site, loc, comp = ('NZ', 'MAVZ', '10', 'HHZ')
-        startdate = UTCDateTime(2013, 2, 26)
-        enddate = UTCDateTime(2013, 2, 27)
-        st = self.ds.clients[0].client.get_waveforms(net, site, loc, comp, startdate,
-                                                     enddate, dtype='float64')
-        inv = read_inventory(os.path.join(self.sds_dir, 'MAVZ.xml'),
-                             format='STATIONXML')
-        inv_dt = inv.select(location=loc, channel=comp,
-                            starttime=startdate, endtime=enddate)
-        pp = PostProcess(st=st, inv=inv, inv_dt=inv_dt, loc=loc,
-                         comp=comp, fill_value=np.nan, startdate=startdate,
-                         enddate=enddate)
-        pp.run_checks()
+    for (a, b) in zip(pp.checklist, pp.res):
+        if b:
+            assert a[0] == "check_case_no_station_issues"
+    for (a, b) in zip(pp.pp_functions, pp.res):
+        if b:
+            assert a[0] == "output_case_no_station_issues"
+    tr = pp.run_post_processing()
+    assert int(tr.stats.npts) == int(8640000)
 
-        # Check correct test case:
-        self.assertEqual(
-            [a[0] for (a, b) in zip(pp.checklist, pp.res) if b],
-            ["check_case_no_data"]
-        )
-        self.assertEqual(
-            [a[0] for (a, b) in zip(pp.pp_functions, pp.res) if b],
-            ["output_case_no_data"]
-        )
-        with self.assertRaises(PostProcessException):
-            pp.run_post_processing()
+def test_case_stream_starttime_equals_channel_endtime(setup_sds):
+    sds_dir, ds = setup_sds
+    net, site, loc, comp = ('NZ', 'MAVZ', '10', 'HHZ')
+    startdate = UTCDateTime(2013, 2, 26)
+    enddate = UTCDateTime(2013, 2, 27)
+    st = ds.clients[0].client.get_waveforms(net, site, loc, comp, startdate,
+                                                    enddate, dtype='float64')
+    inv = read_inventory(os.path.join(sds_dir, 'MAVZ.xml'),
+                            format='STATIONXML')
+    inv_dt = inv.select(location=loc, channel=comp,
+                        starttime=startdate, endtime=enddate)
+    pp = PostProcess(st=st, inv=inv, inv_dt=inv_dt, loc=loc,
+                        comp=comp, fill_value=np.nan, startdate=startdate,
+                        enddate=enddate)
+    pp.run_checks()
 
-    def test_case_stream_endtime_equals_channel_starttime(self):
-        net, site, loc, comp = ('NZ', 'MAVZ', '10', 'HHZ')
-        startdate = UTCDateTime(2013, 3, 21)
-        enddate = UTCDateTime(2013, 3, 22)
-        st = self.ds.clients[0].client.get_waveforms(net, site, loc, comp, startdate,
-                                                     enddate, dtype='float64')
-        inv = read_inventory(os.path.join(self.sds_dir, 'MAVZ.xml'),
-                             format='STATIONXML')
-        inv_dt = inv.select(location=loc, channel=comp,
-                            starttime=startdate, endtime=enddate)
-        pp = PostProcess(st=st, inv=inv, inv_dt=inv_dt, loc=loc,
-                         comp=comp, fill_value=np.nan, startdate=startdate,
-                         enddate=enddate)
-        pp.run_checks()
+    # Check correct test case:
+    for (a, b) in zip(pp.checklist, pp.res):
+        if b:
+            assert a[0] == "check_case_no_data"
+    for (a, b) in zip(pp.pp_functions, pp.res):
+        if b:
+            assert a[0] == "output_case_no_data"
+    with pytest.raises(PostProcessException):
+        pp.run_post_processing()
 
-        # Check correct test case:
-        self.assertEqual(
-            [a[0] for (a, b) in zip(pp.checklist, pp.res) if b],
-            ["check_case_no_data"]
-        )
-        self.assertEqual(
-            [a[0] for (a, b) in zip(pp.pp_functions, pp.res) if b],
-            ["output_case_no_data"]
-        )
-        with self.assertRaises(PostProcessException):
-            pp.run_post_processing()
+def test_case_stream_endtime_equals_channel_starttime(setup_sds):
+    sds_dir, ds = setup_sds
+    net, site, loc, comp = ('NZ', 'MAVZ', '10', 'HHZ')
+    startdate = UTCDateTime(2013, 3, 21)
+    enddate = UTCDateTime(2013, 3, 22)
+    st = ds.clients[0].client.get_waveforms(net, site, loc, comp, startdate,
+                                                    enddate, dtype='float64')
+    inv = read_inventory(os.path.join(sds_dir, 'MAVZ.xml'),
+                            format='STATIONXML')
+    inv_dt = inv.select(location=loc, channel=comp,
+                        starttime=startdate, endtime=enddate)
+    pp = PostProcess(st=st, inv=inv, inv_dt=inv_dt, loc=loc,
+                        comp=comp, fill_value=np.nan, startdate=startdate,
+                        enddate=enddate)
+    pp.run_checks()
 
-    def test_case_multiple_channel_periods(self):
-        net, site, loc, comp = ('NZ', 'MAVZ', '10', 'HHZ')
-        startdate = UTCDateTime(2015, 1, 9)
-        enddate = UTCDateTime(2015, 1, 10)
-        st = self.ds.clients[0].client.get_waveforms(net, site, loc, comp, startdate,
-                                                     enddate, dtype='float64')
-        inv = read_inventory(os.path.join(self.sds_dir, 'MAVZ.xml'),
-                             format='STATIONXML')
-        inv_dt = inv.select(location=loc, channel=comp,
-                            starttime=startdate, endtime=enddate)
-        pp = PostProcess(st=st, inv=inv, inv_dt=inv_dt, loc=loc,
-                         comp=comp, fill_value=np.nan, startdate=startdate,
-                         enddate=enddate)
-        pp.run_checks()
+    # Check correct test case:
+    for (a, b) in zip(pp.checklist, pp.res):
+        if b:
+            assert a[0] == "check_case_no_data"
+    for (a, b) in zip(pp.pp_functions, pp.res):
+        if b:
+            assert a[0] == "output_case_no_data"
+    with pytest.raises(PostProcessException):
+        pp.run_post_processing()
 
-        # Check correct test case:
-        self.assertEqual(
-            [a[0] for (a, b) in zip(pp.checklist, pp.res) if b],
-            ["check_case_multiple_channel_periods"]
-        )
-        self.assertEqual(
-            [a[0] for (a, b) in zip(pp.pp_functions, pp.res) if b],
-            ["output_case_multiple_channel_periods"]
-        )
+def test_case_multiple_channel_periods(setup_sds):
+    sds_dir, ds = setup_sds
+    net, site, loc, comp = ('NZ', 'MAVZ', '10', 'HHZ')
+    startdate = UTCDateTime(2015, 1, 9)
+    enddate = UTCDateTime(2015, 1, 10)
+    st = ds.clients[0].client.get_waveforms(net, site, loc, comp, startdate,
+                                                    enddate, dtype='float64')
+    inv = read_inventory(os.path.join(sds_dir, 'MAVZ.xml'),
+                            format='STATIONXML')
+    inv_dt = inv.select(location=loc, channel=comp,
+                        starttime=startdate, endtime=enddate)
+    pp = PostProcess(st=st, inv=inv, inv_dt=inv_dt, loc=loc,
+                        comp=comp, fill_value=np.nan, startdate=startdate,
+                        enddate=enddate)
+    pp.run_checks()
 
-    def test_case_incomplete_station_metadata(self):
-        startdate = UTCDateTime(2013, 4, 9)
-        enddate = UTCDateTime(2013, 4, 10)
-        net, site, loc, comp = ('NZ', 'MAVZ', '10', 'HHZ')
-        inv = read_inventory(os.path.join(self.sds_dir, 'MAVZ.xml'),
-                             format='STATIONXML')
-        inv_dt = inv.select(location=loc, channel=comp,
-                            starttime=startdate, endtime=enddate)
-        st = self.ds.clients[0].client.get_waveforms(net, site, loc, comp, startdate,
-                                                     enddate, dtype='float64')
-        pp = PostProcess(st=st, inv=inv, inv_dt=inv_dt, loc=loc,
-                         comp=comp, fill_value=np.nan, startdate=startdate,
-                         enddate=enddate)
-        pp.run_checks()
+    # Check correct test case:
+    for (a, b) in zip(pp.checklist, pp.res):
+        if b:
+            assert a[0] == "check_case_multiple_channel_periods"
+    for (a, b) in zip(pp.pp_functions, pp.res):
+        if b:
+            assert a[0] == "output_case_multiple_channel_periods"
 
-        # Check correct test case:
-        self.assertEqual(
-            [a[0] for (a, b) in zip(pp.checklist, pp.res) if b],
-            ["check_case_incomplete_station_metadata"]
-        )
-        self.assertEqual(
-            [a[0] for (a, b) in zip(pp.pp_functions, pp.res) if b],
-            ["output_case_incomplete_station_metadata"]
-        )
-        test_st = st.copy()
-        test_st.trim(startdate, inv_dt[0][0][0].end_date,
-                     nearest_sample=False)
-        test_st.attach_response(inv_dt)
-        test_st.remove_sensitivity()
-        test_st.trim(startdate, enddate, nearest_sample=False,
-                     pad=True, fill_value=np.nan
-                     )
-        tr = pp.run_post_processing()
+def test_case_incomplete_station_metadata(setup_sds):
+    sds_dir, ds = setup_sds
+    startdate = UTCDateTime(2013, 4, 9)
+    enddate = UTCDateTime(2013, 4, 10)
+    net, site, loc, comp = ('NZ', 'MAVZ', '10', 'HHZ')
+    inv = read_inventory(os.path.join(sds_dir, 'MAVZ.xml'),
+                            format='STATIONXML')
+    inv_dt = inv.select(location=loc, channel=comp,
+                        starttime=startdate, endtime=enddate)
+    st = ds.clients[0].client.get_waveforms(net, site, loc, comp, startdate,
+                                                    enddate, dtype='float64')
+    pp = PostProcess(st=st, inv=inv, inv_dt=inv_dt, loc=loc,
+                        comp=comp, fill_value=np.nan, startdate=startdate,
+                        enddate=enddate)
+    pp.run_checks()
 
-        np.testing.assert_array_almost_equal(tr.data, test_st[0].data)
+    # Check correct test case:
+    for (a, b) in zip(pp.checklist, pp.res):
+        if b:
+            assert a[0] == "check_case_incomplete_station_metadata"
+    for (a, b) in zip(pp.pp_functions, pp.res):
+        if b:
+            assert a[0] == "output_case_incomplete_station_metadata"
+    test_st = st.copy()
+    test_st.trim(startdate, inv_dt[0][0][0].end_date,
+                    nearest_sample=False)
+    test_st.attach_response(inv_dt)
+    test_st.remove_sensitivity()
+    test_st.trim(startdate, enddate, nearest_sample=False,
+                    pad=True, fill_value=np.nan
+                    )
+    tr = pp.run_post_processing()
+
+    np.testing.assert_array_almost_equal(tr.data, test_st[0].data)
 
 
 class MetadataTestCase(unittest.TestCase):
