@@ -211,8 +211,8 @@ class SSAM(FeatureBaseClass):
         :type fs: float
 
         """
-        fl = np.floor(fs) / np.floor(nfft)
-        fh = np.floor(fs / 2)
+        fl = fs / nfft
+        fh = fs / 2
         freqs = np.logspace(
             np.log10(fl), np.log10(fh), nfilters + 2
         )
