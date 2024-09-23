@@ -32,11 +32,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-ml = ["scikit-learn", "torch", "torchvision", "torchaudio"]
+ml = ["scikit-learn", "torch", "torchvision", "torchaudio", "scikit-fuzzy"]
 
 [project.urls]
-Homepage = "https://github.com/SAM-Toolbox/tsctools"
-Issues = "https://github.com/SAM-Toolbox/tsctools/issues"
+Homepage = "https://tsc-tools.github.io/zizou/"
+Issues = "https://github.com/tsc-tools/zizou/issues"
 
 [tool.setuptools.packages.find]
 where = ["src", "tests"]
