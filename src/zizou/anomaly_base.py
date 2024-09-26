@@ -7,8 +7,6 @@ import pandas as pd
 from tqdm import tqdm
 import xarray as xr
 
-from zizou.util import xarray2hdf5
-
 
 logger = logging.getLogger(__name__)
 
