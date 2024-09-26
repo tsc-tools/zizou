@@ -129,8 +129,8 @@ class SpectralFeatures(FeatureBaseClass):
         zero-th spectral moments. The spectral moments
         are calculated with log-spaced frequencies.
         """
-        m0 = 2 * scipy.integrate.simps(freq ** 0 * psd)
-        m2 = 2 * scipy.integrate.simps(freq ** 2 * psd)
+        m0 = 2 * scipy.integrate.simpson(freq ** 0 * psd)
+        m2 = 2 * scipy.integrate.simpson(freq ** 2 * psd)
         return np.sqrt(m2 / m0)
 
     @staticmethod
@@ -142,9 +142,9 @@ class SpectralFeatures(FeatureBaseClass):
         0 is a Dirac delta PSDF (sine wave), 1 is a flat PSDF
         (white signal).
         """
-        m0 = 2 * scipy.integrate.simps(freq**0 * psd)
-        m1 = 2 * scipy.integrate.simps(freq**1 * psd)
-        m2 = 2 * scipy.integrate.simps(freq**2 * psd)
+        m0 = 2 * scipy.integrate.simpson(freq**0 * psd)
+        m1 = 2 * scipy.integrate.simpson(freq**1 * psd)
+        m2 = 2 * scipy.integrate.simpson(freq**2 * psd)
         return np.sqrt(1 - m1**2 / m2 / m0)
 
     @staticmethod
