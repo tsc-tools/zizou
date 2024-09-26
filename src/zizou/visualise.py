@@ -5,13 +5,53 @@ from cftime import date2num, num2date
 import datashader as ds
 from matplotlib.colors import Normalize
 from matplotlib import cm
+import matplotlib.dates as mdates
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-def plot_ssam_mpl(xdf, log=False, axes=None, dbscale=False, cmap=cm.viridis,
-                  clip=[0.0, 1.0], figsize=(12, 6)):
+import xarray as xr
+
+
+def spectrogram_preprocessing(xdf, log=False, dbscale=False, clip=[0.0, 1.0], canvas_dim=(400,400)):
+    spec = xdf.data
+    freq_dim = xdf.dims[0]
+    freq = xdf[freq_dim].data
+    dates = xdf['datetime'].data
+
+    # set 0-frequency values to NaN 
+    if freq[0] == 0:
+        freq = freq[1:]
+        spec = spec[1:, :]
+
+    vmin, vmax = clip
+    _range = float(np.nanmax(spec) - np.nanmin(spec))
+    vmin = np.nanmin(spec) + vmin * _range
+    vmax = np.nanmin(spec) + vmax * _range
+    
+    with np.errstate(invalid='ignore'):
+        spec = np.where(spec > vmin, spec, vmin)
+        spec = np.where(spec < vmax, spec, vmax)
+
+    if dbscale:
+        spec = 10*np.log10(spec)
+
+    if canvas_dim is not None:
+        dates = date2num(dates.astype('datetime64[us]').astype(datetime),
+                         units='hours since 1970-01-01 00:00:00.0',
+                         calendar='gregorian')
+        da = xr.DataArray(spec, coords=[('frequency', freq), ('datetime', dates)])
+        cvs = ds.Canvas(plot_width=canvas_dim[0],
+                        plot_height=canvas_dim[1])
+        agg = cvs.raster(source=da)
+        freq, d, spec = agg.coords['frequency'].data, agg.coords['datetime'], agg.data
+        dates = num2date(d, units='hours since 1970-01-01 00:00:00.0', calendar='gregorian')
+    return dates, freq, spec
+
+
+
+def plot_ssam_mpl(xdf, axes=None,  cmap=cm.viridis, figsize=(12, 6), **kwargs):
     """
     Plot spectrogram data using matplotlib.
 
@@ -45,28 +85,15 @@ def plot_ssam_mpl(xdf, log=False, axes=None, dbscale=False, cmap=cm.viridis,
     >>> fig = plot_ssam_mpl(ft.feature)
 
     """
-    spec = xdf.data
-    freq = xdf.frequency.data
-    time = xdf.datetime.data
-    time = pd.to_datetime(time).to_pydatetime()
-    
-    # db scale and remove zero/offset for amplitude
-    if dbscale:
-        spec = 10 * np.log10(spec[1:, :])
-    else:
-        spec = np.sqrt(spec[1:, :])
-    freq = freq[1:]
 
+    dates, freq, spec = spectrogram_preprocessing(xdf, **kwargs)
+    dates = mdates.date2num(dates)
+     
+    # db scale and remove zero/offset for amplitude
+    clip = kwargs.get('clip', [0.0, 1.0])
     vmin, vmax = clip
-    _range = float(spec.max() - spec.min())
-    vmin = spec.min() + vmin * _range
-    vmax = spec.min() + vmax * _range
     norm = Normalize(vmin, vmax, clip=True)
     # ignore warnings due to NaNs
-    with np.errstate(invalid='ignore'):
-        spec = np.where(spec < vmin, vmin, spec)
-        spec = np.where(spec > vmax, vmax, spec)
-
     if not axes:
         fig = plt.figure(figsize=figsize)
         ax = fig.add_subplot(111)
@@ -74,30 +101,27 @@ def plot_ssam_mpl(xdf, log=False, axes=None, dbscale=False, cmap=cm.viridis,
         ax = axes
 
     # calculate half bin width
-    halfbin_time = (time[1] - time[0]) / 2.0
+    halfbin_time = (dates[1] - dates[0]) / 2.0
     halfbin_freq = (freq[1] - freq[0]) / 2.0
 
-    # argument None is not allowed for kwargs on matplotlib python 3.3
-    kwargs = dict(cmap=cmap)
-
-    if log:
+    if kwargs.get('log', False):
         # pcolor expects one bin more at the right end
         freq = np.concatenate((freq, [freq[-1] + 2 * halfbin_freq]))
-        time = np.concatenate((time, [time[-1] + 2 * halfbin_time]))
+        dates = np.concatenate((dates, [dates[-1] + 2 * halfbin_time]))
         # center bin
-        time -= halfbin_time
+        dates -= halfbin_time
         freq -= halfbin_freq
         # Log scaling for frequency values (y-axis)
         ax.set_yscale('log')
         # Plot times
-        ps = ax.pcolormesh(time, freq, spec, norm=norm, **kwargs)
+        ps = ax.pcolormesh(dates, freq, spec, cmap=cmap)
     else:
         # this method is much much faster!
         spec = np.flipud(spec)
         # center bin
-        extent = (time[0] - halfbin_time, time[-1] + halfbin_time,
+        extent = (dates[0] - halfbin_time, dates[-1] + halfbin_time,
                   freq[0] - halfbin_freq, freq[-1] + halfbin_freq)
-        ps = ax.imshow(spec, interpolation="nearest", extent=extent, **kwargs)
+        ps = ax.imshow(spec, interpolation="nearest", extent=extent, cmap=cmap)
 
     # set correct way of axis, whitespace before and after with window
     # length
@@ -109,15 +133,17 @@ def plot_ssam_mpl(xdf, log=False, axes=None, dbscale=False, cmap=cm.viridis,
         return ax
 
     ax.set_ylabel('Frequency [Hz]')
-    x_ticks = np.datetime64(xdf.attrs['starttime']) + ax.get_xticks().astype('timedelta64[s]')
-    x_tick_labels = x_ticks.astype('datetime64[h]')
-    ax.set_xticklabels(x_tick_labels, rotation=45)
+    date_format = mdates.DateFormatter('%Y-%m-%d %H:%M:%S')
+    ax.xaxis.set_major_formatter(date_format)
+    # x_ticks = np.datetime64(dates[0]) + ax.get_xticks().astype('timedelta64[s]')
+    # x_tick_labels = x_ticks.astype('datetime64[h]')
+    # ax.set_xticklabels(x_tick_labels, rotation=45)
+    fig.autofmt_xdate()
 
     return fig
 
 
-def plot_ssam_plotly(xdf, log=False, dbscale=False, cmap='Ice_r',
-                     clip=[0.0, 1.0], new_fig=True, canvas_dim=(400,400)):
+def plot_ssam_plotly(xdf, cmap='Ice_r', new_fig=True, **kwargs):
     """
     Plot spectrogram data using matplotlib.
 
@@ -152,36 +178,7 @@ def plot_ssam_plotly(xdf, log=False, dbscale=False, cmap='Ice_r',
     >>> _ = ft.compute(test_signal())
     >>> fig = plot_ssam_plotly(ft.feature)
     """
-    vmin, vmax = clip
-    _range = float(xdf.max() - xdf.min())
-    vmin = xdf.min() + vmin * _range
-    vmax = xdf.min() + vmax * _range
-    
-    with np.errstate(invalid='ignore'):
-        xdf = xdf.where(xdf > vmin, vmin)
-        xdf = xdf.where(xdf < vmax, vmax)
-
-    if dbscale:
-        xdf = 10*np.log10(xdf)
-
-    freq_dim = xdf.dims[0]
-    if xdf[freq_dim].data[0] == 0:
-        xdf[{freq_dim:0}] = np.ones(xdf.shape[1])*np.nan
-
-    freq = xdf[freq_dim]
-    dates = xdf['datetime']
-    spec = xdf.data
-    if canvas_dim is not None:
-        dates = date2num(xdf.datetime.data.astype('datetime64[us]').astype(datetime),
-                         units='hours since 1970-01-01 00:00:00.0',
-                         calendar='gregorian')
-        xdf = xdf.assign_coords({'datetime': dates})
-        cvs = ds.Canvas(plot_width=canvas_dim[0],
-                        plot_height=canvas_dim[1])
-        agg = cvs.raster(source=xdf)
-        freq, d, spec = agg.coords[freq_dim], agg.coords['datetime'], agg.data
-        dates = num2date(d, units='hours since 1970-01-01 00:00:00.0', calendar='gregorian')
-
+    dates, freq, spec = spectrogram_preprocessing(xdf, **kwargs)
     if not new_fig: 
         return go.Heatmap(
             z=spec,
@@ -200,7 +197,7 @@ def plot_ssam_plotly(xdf, log=False, dbscale=False, cmap='Ice_r',
         yaxis_title='Frequency [Hz]'
     )
 
-    if log:
+    if kwargs.get('log', False):
         fig.update_yaxes(type='log')
 
     return fig
