@@ -22,8 +22,8 @@ def rsam(arr, axis=None):
 
 
 def rsam_wideband_energy_ratio(arr_rsam, arr_wideband, axis=-1):
-    energy_rsam_band = scipy.integrate.simps(arr_rsam**2, axis=axis)
-    energy_wide_band = scipy.integrate.simps(arr_wideband**2, axis=axis)
+    energy_rsam_band = scipy.integrate.simpson(arr_rsam**2, axis=axis)
+    energy_wide_band = scipy.integrate.simpson(arr_wideband**2, axis=axis)
     return energy_rsam_band / energy_wide_band
 
 
