@@ -13,7 +13,7 @@ from zizou.cpxtrace import (
     Centroid, Inst_Band, Inst_Freq, Norm_Env, WindowCentroid
 )
 from zizou.data import DataSource
-from zizou.util import test_signal, xarray2hdf5
+from zizou.util import test_signal
 
 from zizou.cpxtrace import Inst_Band, Inst_Freq, Norm_Env, Centroid, WindowCentroid
 

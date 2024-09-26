@@ -15,7 +15,7 @@ import numpy as np
 import pandas as pd
 from obspy import UTCDateTime, read_inventory, Trace
 import xarray as xr
-from zizou.util import xarray2hdf5, generate_test_data, test_signal
+from zizou.util import generate_test_data, test_signal
 
 
 from zizou.data import (WaveformBaseclass,

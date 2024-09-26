@@ -169,10 +169,10 @@ class AutoEncoder(AnomalyDetectionBaseClass):
     transform_dict = {'rsam': 'log'}
 
     stack_dict = {'dsar': '2D',
-                  'central_freq': '1H',
-                  'predom_freq': '1H',
-                  'variance': '1H',
-                  'bandwidth': '1H'}
+                  'central_freq': '1h',
+                  'predom_freq': '1h',
+                  'variance': '1h',
+                  'bandwidth': '1h'}
 
     files = dict(featurefile="autoencoder_features.nc",
                  modelfile="autoencoder_weights.pth",

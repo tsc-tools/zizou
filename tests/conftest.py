@@ -9,7 +9,7 @@ from tonik import StorageGroup
 from zizou.data import SDSWaveforms, DataSource
 import yaml
 
-from zizou.util import generate_test_data, xarray2hdf5
+from zizou.util import generate_test_data
 
 def pytest_addoption(parser):
     parser.addoption(

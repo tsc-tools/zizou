@@ -18,7 +18,6 @@ from zizou.util import (stride_windows,
                        trace_window_times,
                        apply_freq_filter,
                        round_time,
-                       xarray2hdf5,
                        test_signal)
 from zizou.ssam import SSAM
 from zizou.rsam import RSAM
@@ -165,68 +164,6 @@ class UtilTestCase(unittest.TestCase):
         self.assertEqual(round_time(time, 600),
                          UTCDateTime(2021,5,21,13,10))
 
-    def test_xarray2hdf5(self):
-        """
-        Test writing xarray data to hdf5.
-        """
-        linfreqs = np.arange(0, 25.1, 0.1)
-        s = SSAM(interval=60, per_lap=.9, smooth=10,
-                 frequencies=linfreqs)
-        td = tempfile.mkdtemp()
-
-        xdf = s.compute(test_signal(sinusoid=False))
-        xarray2hdf5(xdf, td)
- 
-        xdf_test = xr.open_dataset(os.path.join(td, 'ssam.nc'), group="original")
-        np.testing.assert_array_equal(xdf['ssam'].values,
-                                      xdf_test['ssam'].values)
-        np.testing.assert_array_equal(xdf['frequency'].values,
-                                      np.squeeze(xdf_test['frequency'].values))
-        # minor differences can occur on the level of nanoseconds; ensure
-        # differences are less than 1 microsecond
-        dt = np.abs((xdf_test['datetime'].values - xdf['datetime'].values)).max()
-        self.assertTrue(dt < np.timedelta64(1, 'us'))
-        
-
-    def test_xarray2hdf5_with_gaps(self):
-        """
-        Test writing xarray data to hdf5 with gaps.
-        """
-        linfreqs = np.arange(0, 25.1, 0.1)
-        r = RSAM()
-
-        xdf1 = r.compute(test_signal(nsec=3600, starttime=UTCDateTime(2022,7,18,8,0,0)))
-        xdf2 = r.compute(test_signal(nsec=3600, starttime=UTCDateTime(2022,7,18,12,0,0)))
-
-        xarray2hdf5(xdf1, self.tempdir)
-        xarray2hdf5(xdf2, self.tempdir)
-        xdf_test = xr.open_dataset(os.path.join(self.tempdir, 'rsam.nc'),
-                                   group='original')
-        self.assertEqual(xdf_test.rsam.isnull().sum(), 18)
-         
-    @unittest.expectedFailure
-    def test_xarray2hdf5_multi_access(self):
-        """
-        Test writing xarray data to hdf5 while the file is open. This is currently
-        not working with NetCDF4. See the following discussions for reference:
-        https://github.com/pydata/xarray/issues/2887
-        https://stackoverflow.com/questions/49701623/is-there-a-way-to-release-the-file-lock-for-a-xarray-dataset
-        """
-        linfreqs = np.arange(0, 25.1, 0.1)
-        r = RSAM()
-
-        xdf1 = r.compute(test_signal(nsec=3600, starttime=UTCDateTime(2022,7,18,8,0,0)))
-        xdf2 = r.compute(test_signal(nsec=3600, starttime=UTCDateTime(2022,7,18,12,0,0)))
-        tf = os.path.join(self.tempdir, tempfile.mktemp())
-
-        xarray2hdf5(xdf1, tf)
-        # f = h5py.File(tf, 'r')
-        xdf_dummy = xr.open_dataset(tf, group='original', engine='h5netcdf')
-        with self.assertRaises(OSError):
-            xarray2hdf5(xdf2, tf)
-        xdf_test = xr.open_dataset(tf, group='original', engine='h5netcdf')
-        self.assertEqual(xdf_test.rsam.isnull().sum(), 18)
- 
 
 def _dummy_trace_data(n=2048, hz=100.):
     t = np.linspace(0, 40 * np.pi, n) + np.linspace(0, 13 * np.pi, n)

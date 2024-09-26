@@ -12,7 +12,7 @@ from zizou.util import generate_test_data
 
 
 def test_get_features(setup_ac):
-    savedir, sg, config = setup_ac
+    savedir, sg, _, config = setup_ac
     transform_dict = {'rsam': 'log'}
     stack_dict = {'dsar': '2D',
                   'central_freq': '1H',

@@ -9,7 +9,8 @@ from obspy import UTCDateTime
 import xarray as xr
 
 from zizou.spectral_features import SpectralFeatures
-from zizou.util import test_signal, xarray2hdf5
+from zizou.util import test_signal
+from tonik import StorageGroup
 
 
 class SpectralTestCase(unittest.TestCase):
@@ -56,6 +57,10 @@ class SpectralTestCase(unittest.TestCase):
         tr = test_signal(nsec=nsec, starttime=starttime, gaps=True)
 
         startwin = starttime
+        sg = StorageGroup('test', self.outdir)
+        sg.starttime = starttime.datetime
+        sg.endtime = (starttime + nsec).datetime
+        st = sg.get_store()
         while True:
             endwin = startwin + step
             if endwin > tr.stats.endtime:
@@ -63,13 +68,9 @@ class SpectralTestCase(unittest.TestCase):
             ntr = tr.slice(startwin, endwin)
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                xdf = sf.compute(ntr)
-            for featureName in list(xdf.data_vars.keys()):
-                xarray2hdf5(xdf, self.outdir)
+                st.save(sf.compute(ntr))
             startwin = endwin
         for feature in ['bandwidth', 'central_freq', 'predom_freq']:
-            xdf = xr.load_dataset(os.path.join(self.outdir, feature+'.nc'),
-                                  group='original')
-            self.assertEqual(xdf[feature].data.shape, (144,))
+            self.assertEqual(st(feature).data.shape, (144,))
 
 
