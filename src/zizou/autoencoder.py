@@ -311,7 +311,7 @@ class AutoEncoder(AnomalyDetectionBaseClass):
             xda = xr.DataArray(clustered_data,
                                 coords=[cluster_names, dates],
                                 dims=['cluster', 'datetime'])
-            return xr.Dataset({'autoencoder': xda})
+            return xr.Dataset({'autoencoder_cluster': xda})
         xda = xr.DataArray(encoded_data.T,
                            coords=[list(range(encoded_data.shape[1])),
                                   dates],

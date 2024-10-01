@@ -5,7 +5,7 @@ import os
 import numpy as np
 import pytest
 import requests
-from tonik import StorageGroup
+from tonik import Storage
 from zizou.data import SDSWaveforms, DataSource
 import yaml
 
@@ -54,11 +54,11 @@ def setup(tmp_path_factory):
                   ('filterbank', 'fbfrequency')]
 
     savedir = tmp_path_factory.mktemp('zizou_test_tmp', numbered=True)
-    sgw = StorageGroup('volcanoes', savedir)
-    s_wiz = sgw.get_store('WIZ', '00', 'HHZ') 
-    s_mdr = sgw.get_store('MDR', '00', 'BHZ') 
-    s_mavz = sgw.get_store('MAVZ', '00', 'EHZ') 
-    s_mms = sgw.get_store('MMS', '00', 'BHZ') 
+    sgw = Storage('volcanoes', savedir)
+    s_wiz = sgw.get_substore('WIZ', '00', 'HHZ') 
+    s_mdr = sgw.get_substore('MDR', '00', 'BHZ') 
+    s_mavz = sgw.get_substore('MAVZ', '00', 'EHZ') 
+    s_mms = sgw.get_substore('MMS', '00', 'BHZ') 
    # Generate some fake data
     for _f in features1D:
         feat = generate_test_data(tstart=tstart,
@@ -88,11 +88,11 @@ def setup(tmp_path_factory):
 @pytest.fixture(scope='module')
 def setup_ac(setup):
     savedir = setup
-    sg = StorageGroup('volcanoes', rootdir=savedir,
+    sg = Storage('volcanoes', rootdir=savedir,
                       starttime=tstart, 
                       endtime=tstart + timedelta(days=ndays))
-    s_wiz = sg.get_store('WIZ', '00', 'HHZ')
-    s_wsrz = sg.get_store('WSRZ', '00', 'HHZ')
+    s_wiz = sg.get_substore('WIZ', '00', 'HHZ')
+    s_wsrz = sg.get_substore('WSRZ', '00', 'HHZ')
     config = """ 
     autoencoder:
       layers: [2000,500,200,6]

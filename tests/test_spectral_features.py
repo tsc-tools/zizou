@@ -10,7 +10,7 @@ import xarray as xr
 
 from zizou.spectral_features import SpectralFeatures
 from zizou.util import test_signal
-from tonik import StorageGroup
+from tonik import Storage
 
 
 class SpectralTestCase(unittest.TestCase):
@@ -57,10 +57,10 @@ class SpectralTestCase(unittest.TestCase):
         tr = test_signal(nsec=nsec, starttime=starttime, gaps=True)
 
         startwin = starttime
-        sg = StorageGroup('test', self.outdir)
+        sg = Storage('test', self.outdir)
         sg.starttime = starttime.datetime
         sg.endtime = (starttime + nsec).datetime
-        st = sg.get_store()
+        st = sg.get_substore()
         while True:
             endwin = startwin + step
             if endwin > tr.stats.endtime:

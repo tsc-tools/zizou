@@ -4,7 +4,7 @@ import shutil
 import tempfile
 import unittest
 
-from tonik import StorageGroup
+from tonik import Storage
 import xarray as xr
 
 from zizou import AnomalyDetectionBaseClass

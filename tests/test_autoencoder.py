@@ -30,6 +30,7 @@ def test_transform(setup_ac):
     store1.endtime = endtime
     ac = AutoEncoder(config)
     ed = ac.fit_transform(store1, cluster=False)
+    store1.save(ed)
     assert ed['autoencoder'].shape == (6, 145)
  
 
@@ -42,7 +43,8 @@ def test_cluster(setup_ac):
     store1.endtime = endtime
     ac = AutoEncoder(config)
     ed = ac.fit_transform(store1)
-    assert ed['autoencoder'].shape == (5, 145)
+    store1.save(ed)
+    assert ed['autoencoder_cluster'].shape == (5, 145)
  
 @pytest.mark.slow
 def test_early_stopping(setup_ac):

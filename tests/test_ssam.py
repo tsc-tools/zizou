@@ -7,7 +7,7 @@ import warnings
 import numpy as np
 from obspy import Trace, UTCDateTime
 from scipy.signal import find_peaks
-from tonik import StorageGroup
+from tonik import Storage
 import xarray as xr
 
 from zizou.ssam import SSAM
@@ -105,9 +105,9 @@ class SSAMTestCase(unittest.TestCase):
         nsec = 86500 # Slightly longer than 24 h to avoid rounding issues
         step = 3600
         tr = test_signal(nsec=nsec, starttime=starttime, gaps=True)
-        sg = StorageGroup('test', self.outdir, starttime=starttime.datetime,
+        sg = Storage('test', self.outdir, starttime=starttime.datetime,
                           endtime=(starttime + nsec).datetime)
-        store = sg.get_store('WIZ', '00', 'HHZ')
+        store = sg.get_substore('WIZ', '00', 'HHZ')
         startwin = starttime
         while True:
             endwin = startwin + step
