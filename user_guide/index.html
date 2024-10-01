@@ -667,7 +667,7 @@ _ = st.plot()</div>
 <span class="kn">from</span> <span class="nn">zizou.ssam</span> <span class="kn">import</span> <span class="n">SSAM</span>
 <span class="kn">from</span> <span class="nn">zizou.spectral_features</span> <span class="kn">import</span> <span class="n">SpectralFeatures</span>
 <span class="kn">from</span> <span class="nn">zizou.data</span> <span class="kn">import</span> <span class="n">DataSource</span>
-<span class="kn">from</span> <span class="nn">tonik</span> <span class="kn">import</span> <span class="n">StorageGroup</span>
+<span class="kn">from</span> <span class="nn">tonik</span> <span class="kn">import</span> <span class="n">Storage</span>
 
 <span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
 <span class="kn">import</span> <span class="nn">os</span> 
@@ -688,8 +688,8 @@ _ = st.plot()</div>
 <span class="n">feature_dir</span> <span class="o">=</span> <span class="s2">"/tmp/vumt/features/Whakaari/WIZ/HHZ"</span>
 <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">isdir</span><span class="p">(</span><span class="n">feature_dir</span><span class="p">):</span>
     <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">feature_dir</span><span class="p">)</span>
-<span class="n">sg</span> <span class="o">=</span> <span class="n">StorageGroup</span><span class="p">(</span><span class="s1">'Whakaari'</span><span class="p">,</span> <span class="n">rootdir</span><span class="o">=</span><span class="n">feature_dir</span><span class="p">)</span>
-<span class="n">st</span> <span class="o">=</span> <span class="n">sg</span><span class="o">.</span><span class="n">get_store</span><span class="p">(</span><span class="n">site</span><span class="o">=</span><span class="s1">'WIZ'</span><span class="p">,</span> <span class="n">sensor</span><span class="o">=</span><span class="s1">'00'</span><span class="p">,</span> <span class="n">channel</span><span class="o">=</span><span class="s1">'HHZ'</span><span class="p">)</span>
+<span class="n">sg</span> <span class="o">=</span> <span class="n">Storage</span><span class="p">(</span><span class="s1">'Whakaari'</span><span class="p">,</span> <span class="n">rootdir</span><span class="o">=</span><span class="n">feature_dir</span><span class="p">)</span>
+<span class="n">st</span> <span class="o">=</span> <span class="n">sg</span><span class="o">.</span><span class="n">get_substore</span><span class="p">(</span><span class="n">site</span><span class="o">=</span><span class="s1">'WIZ'</span><span class="p">,</span> <span class="n">sensor</span><span class="o">=</span><span class="s1">'00'</span><span class="p">,</span> <span class="n">channel</span><span class="o">=</span><span class="s1">'HHZ'</span><span class="p">)</span>
 <span class="k">for</span> <span class="n">tr</span> <span class="ow">in</span> <span class="n">ds</span><span class="o">.</span><span class="n">get_waveforms</span><span class="p">(</span><span class="n">net</span><span class="o">=</span><span class="s2">"NZ"</span><span class="p">,</span> <span class="n">site</span><span class="o">=</span><span class="s2">"WIZ"</span><span class="p">,</span> <span class="n">loc</span><span class="o">=</span><span class="s2">"10"</span><span class="p">,</span> <span class="n">comp</span><span class="o">=</span><span class="s2">"HHZ"</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="n">UTCDateTime</span><span class="p">(</span><span class="s2">"2024-05-01"</span><span class="p">),</span> <span class="n">end</span><span class="o">=</span><span class="n">UTCDateTime</span><span class="p">(</span><span class="s2">"2024-06-01"</span><span class="p">)):</span>
     <span class="nb">print</span><span class="p">(</span><span class="n">tr</span><span class="p">)</span>
     <span class="k">for</span> <span class="n">feat</span> <span class="ow">in</span> <span class="p">(</span><span class="n">rsam</span><span class="p">,</span> <span class="n">rsam_energy_prop</span><span class="p">,</span> <span class="n">ssam</span><span class="p">,</span> <span class="n">dsar</span><span class="p">,</span> <span class="n">spec</span><span class="p">):</span>
@@ -701,7 +701,7 @@ from zizou.rsam import RSAM, EnergyExplainedByRSAM
 from zizou.ssam import SSAM
 from zizou.spectral_features import SpectralFeatures
 from zizou.data import DataSource
-from tonik import StorageGroup
+from tonik import Storage
 
 import numpy as np
 import os 
@@ -722,8 +722,8 @@ spec = SpectralFeatures()
 feature_dir = "/tmp/vumt/features/Whakaari/WIZ/HHZ"
 if not os.path.isdir(feature_dir):
     os.makedirs(feature_dir)
-sg = StorageGroup('Whakaari', rootdir=feature_dir)
-st = sg.get_store(site='WIZ', sensor='00', channel='HHZ')
+sg = Storage('Whakaari', rootdir=feature_dir)
+st = sg.get_substore(site='WIZ', sensor='00', channel='HHZ')
 for tr in ds.get_waveforms(net="NZ", site="WIZ", loc="10", comp="HHZ", start=UTCDateTime("2024-05-01"), end=UTCDateTime("2024-06-01")):
     print(tr)
     for feat in (rsam, rsam_energy_prop, ssam, dsar, spec):
@@ -741,7 +741,7 @@ for tr in ds.get_waveforms(net="NZ", site="WIZ", loc="10", comp="HHZ", start=UTC
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-InputPrompt jp-InputArea-prompt">
 </div><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<p>Once features have been computed we can request them using tonik's StorageGroup class:</p>
+<p>Once features have been computed we can request them using tonik's Storage class:</p>
 </div>
 </div>
 </div>
@@ -765,14 +765,14 @@ for tr in ds.get_waveforms(net="NZ", site="WIZ", loc="10", comp="HHZ", start=UTC
 </clipboard-copy>
 </div>
 <div class="highlight-ipynb hl-python"><pre><span></span><span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="nn">plt</span> 
-<span class="kn">from</span> <span class="nn">tonik</span> <span class="kn">import</span> <span class="n">StorageGroup</span>
+<span class="kn">from</span> <span class="nn">tonik</span> <span class="kn">import</span> <span class="n">Storage</span>
 <span class="kn">import</span> <span class="nn">datetime</span>
 
 <span class="n">starttime</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="p">(</span><span class="mi">2024</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">10</span><span class="p">)</span>
 <span class="n">endtime</span> <span class="o">=</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="p">(</span><span class="mi">2024</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
 <span class="n">sg</span><span class="o">.</span><span class="n">starttime</span> <span class="o">=</span> <span class="n">starttime</span>
 <span class="n">sg</span><span class="o">.</span><span class="n">endtime</span> <span class="o">=</span> <span class="n">endtime</span> 
-<span class="n">store</span> <span class="o">=</span> <span class="n">sg</span><span class="o">.</span><span class="n">get_store</span><span class="p">(</span><span class="n">site</span><span class="o">=</span><span class="s2">"WIZ"</span><span class="p">,</span> <span class="n">sensor</span><span class="o">=</span><span class="s2">"00"</span><span class="p">,</span> <span class="n">channel</span><span class="o">=</span><span class="s2">"HHZ"</span><span class="p">)</span>
+<span class="n">store</span> <span class="o">=</span> <span class="n">sg</span><span class="o">.</span><span class="n">get_substore</span><span class="p">(</span><span class="n">site</span><span class="o">=</span><span class="s2">"WIZ"</span><span class="p">,</span> <span class="n">sensor</span><span class="o">=</span><span class="s2">"00"</span><span class="p">,</span> <span class="n">channel</span><span class="o">=</span><span class="s2">"HHZ"</span><span class="p">)</span>
 
 <span class="n">rsam</span> <span class="o">=</span> <span class="n">store</span><span class="p">(</span><span class="s2">"rsam"</span><span class="p">)</span>
 <span class="n">ssam</span> <span class="o">=</span> <span class="n">store</span><span class="p">(</span><span class="s2">"ssam"</span><span class="p">)</span>
@@ -785,14 +785,14 @@ for tr in ds.get_waveforms(net="NZ", site="WIZ", loc="10", comp="HHZ", start=UTC
 <span class="n">ax2</span><span class="o">.</span><span class="n">set_ylabel</span><span class="p">(</span><span class="s2">"SSAM"</span><span class="p">)</span>
 </pre></div>
 <div class="clipboard-copy-txt" id="cell-4">import matplotlib.pyplot as plt 
-from tonik import StorageGroup
+from tonik import Storage
 import datetime
 
 starttime = datetime.datetime(2024, 5, 10)
 endtime = datetime.datetime(2024, 6, 1)
 sg.starttime = starttime
 sg.endtime = endtime 
-store = sg.get_store(site="WIZ", sensor="00", channel="HHZ")
+store = sg.get_substore(site="WIZ", sensor="00", channel="HHZ")
 
 rsam = store("rsam")
 ssam = store("ssam")
