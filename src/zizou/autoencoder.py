@@ -290,7 +290,7 @@ class AutoEncoder(AnomalyDetectionBaseClass):
                 logger.info(f"Early stopped training at epoch {i+1}")
                 break
 
-    def transform(self, store, cluster=True):
+    def transform(self, store):
         assert self._is_fitted(store)
         feats = self.get_features(store)
         dates = feats['datetime']
@@ -302,23 +302,29 @@ class AutoEncoder(AnomalyDetectionBaseClass):
             X = transform_data[:][0]
             X = X.to(self.device_)
             encoded_data = self.model_.encode(X)
+            X_hat = self.model_.decode(encoded_data)
+        
         encoded_data = encoded_data.cpu().numpy()
-        if cluster:
-            clustered_data = self.cluster_.fit_transform(encoded_data,
-                                                         os.path.join(store.path, self.files['scalerfile']),
-                                                         os.path.join(store.path, self.files['clustercenterfile']))
-            cluster_names = list(range(self.cluster_.n_clusters_))
-            xda = xr.DataArray(clustered_data,
-                                coords=[cluster_names, dates],
-                                dims=['cluster', 'datetime'])
-            return xr.Dataset({'autoencoder_cluster': xda})
-        xda = xr.DataArray(encoded_data.T,
+
+        output = {}
+        loss = self.model_.loss(X, X_hat).sum(axis=1)
+        output['autoencoder_loss'] = xr.DataArray(loss.cpu().numpy(),
+                                                    coords=[dates],
+                                                    dims=['datetime'])
+        clustered_data = self.cluster_.fit_transform(encoded_data,
+                                                        os.path.join(store.path, self.files['scalerfile']),
+                                                        os.path.join(store.path, self.files['clustercenterfile']))
+        cluster_names = list(range(self.cluster_.n_clusters_))
+        output['autoencoder_cluster'] = xr.DataArray(clustered_data,
+                            coords=[cluster_names, dates],
+                            dims=['cluster', 'datetime'])
+        output['autoencoder_embedding'] = xr.DataArray(encoded_data.T,
                            coords=[list(range(encoded_data.shape[1])),
                                   dates],
                            dims=['autodim', 'datetime'])
-        return xr.Dataset({'autoencoder': xda})
+        return xr.Dataset(output)
 
-    def fit_transform(self, store, cluster=True):
+    def fit_transform(self, store):
         self.fit(store)
-        self.classifications = self.transform(store, cluster=cluster)
+        self.classifications = self.transform(store)
         return self.classifications
