@@ -1,15 +1,19 @@
 """
 Compute the displacement seismic amplitude ratio (DSAR).
 """
+
+import logging
+
 import numpy as np
-from obspy import UTCDateTime
 import pandas as pd
 import xarray as xr
-
 import yaml
+from obspy import UTCDateTime
 
-from zizou import FeatureBaseClass
-from zizou.util import trace_window_times, round_time
+from .feature_base import FeatureBaseClass
+from .util import round_time, trace_window_times
+
+logger = logging.getLogger(__name__)
 
 
 class DSAR(FeatureBaseClass):
@@ -24,12 +28,18 @@ class DSAR(FeatureBaseClass):
     interpreted in the publication as a change in seismic attenuation
     in the vicinity of the seismic station.
     """
-    features = ['dsar']
 
-    def __init__(self, interval=600., filtertype='bandpass',
-                 lowerfreqband=(4.5, 8),
-                 higherfreqband=(8, 16),
-                 configfile=None, reindex=True):
+    features = ["dsar"]
+
+    def __init__(
+        self,
+        interval=600.0,
+        filtertype="bandpass",
+        lowerfreqband=(4.5, 8),
+        higherfreqband=(8, 16),
+        configfile=None,
+        reindex=True,
+    ):
         super(DSAR, self).__init__()
         self.interval = float(interval)
         self.filtertype = filtertype
@@ -39,21 +49,21 @@ class DSAR(FeatureBaseClass):
 
         if configfile is not None:
             try:
-                with open(configfile, 'r') as fh:
+                with open(configfile, "r") as fh:
                     c = yaml.safe_load(fh)
             except OSError:
                 c = yaml.safe_load(configfile)
-            self.interval = c['default'].get('interval', interval)
-            cd = c.get('dsar')
+            self.interval = c["default"].get("interval", interval)
+            cd = c.get("dsar")
             if cd is not None:
-                self.reindex = cd.get('reindex', reindex)
-                self.filtertype = cd.get('filtertype', filtertype) 
-                lfreq = cd.get('lowerfreqband')
+                self.reindex = cd.get("reindex", reindex)
+                self.filtertype = cd.get("filtertype", filtertype)
+                lfreq = cd.get("lowerfreqband")
                 if lfreq is not None:
-                    self.lowerfreqband = (lfreq['low'], lfreq['high']) 
-                hfreq = cd.get('higherfreqband')
+                    self.lowerfreqband = (lfreq["low"], lfreq["high"])
+                hfreq = cd.get("higherfreqband")
                 if hfreq is not None:
-                    self.higherfreqband = (hfreq['low'], hfreq['high']) 
+                    self.higherfreqband = (hfreq["low"], hfreq["high"])
 
     def compute(self, trace):
         """
@@ -78,6 +88,21 @@ class DSAR(FeatureBaseClass):
         if len(trace) < 1:
             raise ValueError("Trace is empty.")
 
+        logger.info(
+            "Computing DSAR for {} between {} and {}.".format(
+                ".".join(
+                    (
+                        trace.stats.network,
+                        trace.stats.station,
+                        trace.stats.location,
+                        trace.stats.channel,
+                    )
+                ),
+                trace.stats.starttime.isoformat(),
+                trace.stats.endtime.isoformat(),
+            )
+        )
+
         tr_lf = trace.copy()
         # handle gaps (i.e. NaNs)
         mdata = np.ma.masked_invalid(tr_lf.data)
@@ -91,13 +116,15 @@ class DSAR(FeatureBaseClass):
         st_lf = tr_lf.split()
         st_hf = tr_hf.split()
         # Integrate to displacement
-        st_lf.integrate('cumtrapz')
-        st_hf.integrate('cumtrapz')
+        st_lf.integrate("cumtrapz")
+        st_hf.integrate("cumtrapz")
 
-        st_lf.filter(self.filtertype, freqmin=lf_f1, freqmax=lf_f2, corners=4,
-                     zerophase=False)
-        st_hf.filter(self.filtertype, freqmin=hf_f1, freqmax=hf_f2, corners=4,
-                     zerophase=False)
+        st_lf.filter(
+            self.filtertype, freqmin=lf_f1, freqmax=lf_f2, corners=4, zerophase=False
+        )
+        st_hf.filter(
+            self.filtertype, freqmin=hf_f1, freqmax=hf_f2, corners=4, zerophase=False
+        )
 
         starttime = trace.stats.starttime
         endtime = trace.stats.endtime
@@ -129,22 +156,23 @@ class DSAR(FeatureBaseClass):
                 median = np.median(ratio)
 
             feature_data.append(median)
-            feature_idx.append(t0.strftime('%Y-%m-%dT%H:%M:%S'))
-    
-        xda = xr.DataArray(feature_data,
-                           coords=[pd.DatetimeIndex(feature_idx)],
-                           dims='datetime')
-        xdf = xr.Dataset({'dsar': xda})
-        xdf.attrs['starttime'] = trace.stats.starttime.isoformat()
-        xdf.attrs['endtime'] = trace.stats.endtime.isoformat()
-        xdf.attrs['station'] = trace.stats.station
+            feature_idx.append(t0.strftime("%Y-%m-%dT%H:%M:%S"))
+
+        xda = xr.DataArray(
+            feature_data, coords=[pd.DatetimeIndex(feature_idx)], dims="datetime"
+        )
+        xdf = xr.Dataset({"dsar": xda})
+        xdf.attrs["starttime"] = trace.stats.starttime.isoformat()
+        xdf.attrs["endtime"] = trace.stats.endtime.isoformat()
+        xdf.attrs["station"] = trace.stats.station
         if self.reindex:
             starttime = UTCDateTime(str(xda.datetime.data[0]))
             starttime = round_time(starttime, self.interval)
             endtime = UTCDateTime(str(xda.datetime.data[-1]))
             endtime = round_time(endtime, self.interval)
-            new_index = pd.date_range(starttime.datetime, endtime.datetime,
-                                      freq="%dS" % int(self.interval))
-            xdf = xdf.reindex(dict(datetime=new_index), method='nearest')
+            new_index = pd.date_range(
+                starttime.datetime, endtime.datetime, freq="%dS" % int(self.interval)
+            )
+            xdf = xdf.reindex(dict(datetime=new_index), method="nearest")
         self.feature = xdf
         return self.feature

@@ -2,12 +2,18 @@ import importlib
 from os import PathLike
 from typing import Optional
 
-from zizou.anomaly_base import AnomalyDetectionBaseClass
-# from zizou.pca import PCA
-from zizou.feature_base import FeatureBaseClass
-from zizou.rsam import RSAM
-from zizou.spectral_features import SpectralFeatures
-from zizou.ssam import SSAM
+from .zizou_logging import setup_logging
+
+setup_logging()
+
+from .anomaly_base import AnomalyDetectionBaseClass
+from .autoencoder import AutoEncoder
+from .data import DataSource, FDSNWaveforms, MockSDSWaveforms, S3Waveforms, SDSWaveforms
+from .dsar import DSAR
+from .feature_base import FeatureBaseClass
+from .rsam import RSAM, EnergyExplainedByRSAM
+from .spectral_features import SpectralFeatures
+from .ssam import SSAM
 
 __all__ = [
     "AnomalyDetectionBaseClass",

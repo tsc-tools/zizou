@@ -1,18 +1,25 @@
 """
 Compute the Real-time Seismic-Amplitude Measurement (RSAM).
 """
+
+import logging
+
 import numpy as np
-from obspy import UTCDateTime
 import pandas as pd
 import scipy.integrate
 import xarray as xr
+import yaml
+from obspy import UTCDateTime
 
 from zizou import FeatureBaseClass
-from zizou.util import (apply_freq_filter,
-                       trace_window_data,
-                       trace_window_times,
-                       round_time)
-import yaml
+from zizou.util import (
+    apply_freq_filter,
+    round_time,
+    trace_window_data,
+    trace_window_times,
+)
+
+logger = logging.getLogger(__name__)
 
 __all__ = ["RSAM", "EnergyExplainedByRSAM"]
 
@@ -39,7 +46,7 @@ class RSAM(FeatureBaseClass):
                        computing RSAM. Can be either band-pass ('bp'),
                        high-pass ('hp'), or low-pass ('lp').
     :type filtertype: str, optional
-    :param filterfreq: The low and high cutoff frequency. If filtertype is 
+    :param filterfreq: The low and high cutoff frequency. If filtertype is
                        highpass or lowpass, only the first or last value is
                        used, respectively.
 
@@ -48,9 +55,14 @@ class RSAM(FeatureBaseClass):
 
     features = ["rsam"]
 
-    def __init__(self, interval=600., filtertype='bandpass',
-                 filterfreq=(2, 5), configfile=None,
-                 reindex=True):
+    def __init__(
+        self,
+        interval=600.0,
+        filtertype="bandpass",
+        filterfreq=(2, 5),
+        configfile=None,
+        reindex=True,
+    ):
         super(RSAM, self).__init__()
         self.interval = interval
         self.filtertype = filtertype
@@ -60,18 +72,18 @@ class RSAM(FeatureBaseClass):
 
         if configfile is not None:
             try:
-                with open(configfile, 'r') as fh:
+                with open(configfile, "r") as fh:
                     c = yaml.safe_load(fh)
             except OSError:
                 c = yaml.safe_load(configfile)
-            self.interval = c['default'].get('interval', interval)
-            cr = c.get('rsam')
+            self.interval = c["default"].get("interval", interval)
+            cr = c.get("rsam")
             if cr is not None:
-                self.filtertype = cr.get('filtertype', filtertype)
-                freq = cr.get('filterfreq')
+                self.filtertype = cr.get("filtertype", filtertype)
+                freq = cr.get("filterfreq")
                 if freq is not None:
-                    self.filterfreq = (freq['low'], freq['high'])
-                self.reindex = cr.get('reindex', reindex)
+                    self.filterfreq = (freq["low"], freq["high"])
+                self.reindex = cr.get("reindex", reindex)
 
     def compute(self, trace):
         """
@@ -80,6 +92,22 @@ class RSAM(FeatureBaseClass):
         """
         if len(trace) < 1:
             raise ValueError("Trace is empty.")
+
+        logger.info(
+            "Computing RSAM for {} between {} and {}.".format(
+                ".".join(
+                    (
+                        trace.stats.network,
+                        trace.stats.station,
+                        trace.stats.location,
+                        trace.stats.channel,
+                    )
+                ),
+                trace.stats.starttime.isoformat(),
+                trace.stats.endtime.isoformat(),
+            )
+        )
+
         tr = trace.copy()
         starttime = tr.stats.starttime
         endtime = tr.stats.endtime
@@ -105,25 +133,24 @@ class RSAM(FeatureBaseClass):
             mean = trint.data.mean()
             # convert to nanometres so dealing with whole numbers
             feature_data.append(mean / 1e-9)
-            feature_idx.append(
-                trint.stats.starttime.strftime('%Y-%m-%dT%H:%M:%S')
-            )
+            feature_idx.append(trint.stats.starttime.strftime("%Y-%m-%dT%H:%M:%S"))
 
-        xda = xr.DataArray(feature_data,
-                           coords=[pd.DatetimeIndex(feature_idx)],
-                           dims='datetime')
-        xdf = xr.Dataset({'rsam': xda})
-        xdf.attrs['starttime'] = trace.stats.starttime.isoformat()
-        xdf.attrs['endtime'] = trace.stats.endtime.isoformat()
-        xdf.attrs['station'] = trace.stats.station
+        xda = xr.DataArray(
+            feature_data, coords=[pd.DatetimeIndex(feature_idx)], dims="datetime"
+        )
+        xdf = xr.Dataset({"rsam": xda})
+        xdf.attrs["starttime"] = trace.stats.starttime.isoformat()
+        xdf.attrs["endtime"] = trace.stats.endtime.isoformat()
+        xdf.attrs["station"] = trace.stats.station
         if self.reindex:
             starttime = UTCDateTime(str(xda.datetime.data[0]))
             starttime = round_time(starttime, self.interval)
             endtime = UTCDateTime(str(xda.datetime.data[-1]))
             endtime = round_time(endtime, self.interval)
-            new_index = pd.date_range(starttime.datetime, endtime.datetime,
-                                      freq="%dS" % int(self.interval))
-            xdf = xdf.reindex(dict(datetime=new_index), method='nearest')
+            new_index = pd.date_range(
+                starttime.datetime, endtime.datetime, freq="%dS" % int(self.interval)
+            )
+            xdf = xdf.reindex(dict(datetime=new_index), method="nearest")
         self.feature = xdf
         return self.feature
 
@@ -133,16 +160,17 @@ class EnergyExplainedByRSAM(RSAM):
     The proportion of signal energy in the RSAM
     bandwidth, relative to a 0.5-10 Hz bandwidth.
     """
+
     features = ["rsam_energy_prop"]
 
     def __init__(
         self,
-        interval=600.,
+        interval=600.0,
         filtertype=None,
         filterfreq=(None, None),
         filtertype_wb="bandpass",
-        filterfreq_wb=(0.5, 10.),
-        configfile=None
+        filterfreq_wb=(0.5, 10.0),
+        configfile=None,
     ):
         super(EnergyExplainedByRSAM, self).__init__(
             interval=interval,
@@ -157,16 +185,16 @@ class EnergyExplainedByRSAM(RSAM):
         # reopen and extract wideband filter params if any
         if configfile is not None:
             try:
-                with open(configfile, 'r') as fh:
+                with open(configfile, "r") as fh:
                     c = yaml.safe_load(fh)
             except OSError:
                 c = yaml.safe_load(configfile)
-            cr = c.get('rsam')
+            cr = c.get("rsam")
             if cr is not None:
-                self.filtertype_wb = cr.get('filtertype_wb', filtertype_wb)
-                freq = cr.get('filterfreq_wb')
+                self.filtertype_wb = cr.get("filtertype_wb", filtertype_wb)
+                freq = cr.get("filterfreq_wb")
                 if freq is not None:
-                    self.filterfreq_wb = (freq['low'], freq['high'])
+                    self.filterfreq_wb = (freq["low"], freq["high"])
 
     def compute(self, trace):
         """
@@ -176,6 +204,22 @@ class EnergyExplainedByRSAM(RSAM):
         if len(trace) < 1:
             msg = "Trace is empty."
             raise ValueError(msg)
+
+        logger.info(
+            "Computing Energy explained by RSAM for {} between {} and {}.".format(
+                ".".join(
+                    (
+                        trace.stats.network,
+                        trace.stats.station,
+                        trace.stats.location,
+                        trace.stats.channel,
+                    )
+                ),
+                trace.stats.starttime.isoformat(),
+                trace.stats.endtime.isoformat(),
+            )
+        )
+
         tr = trace.copy()
         starttime = tr.stats.starttime
         endtime = tr.stats.endtime
@@ -203,26 +247,24 @@ class EnergyExplainedByRSAM(RSAM):
         feature_idx = []
 
         # loop through data in interval blocks
-        for t0, t1 in trace_window_times(
-            tr_rsam, self.interval, min_len=0.8
-        ):
+        for t0, t1 in trace_window_times(tr_rsam, self.interval, min_len=0.8):
             energy_ratio = rsam_wideband_energy_ratio(
                 tr_rsam.slice(t0, t1, nearest_sample=False).data,
-                tr_wb.slice(t0, t1, nearest_sample=False).data
+                tr_wb.slice(t0, t1, nearest_sample=False).data,
             )
             feature_data.append(energy_ratio)
-            feature_idx.append(t0.strftime('%Y-%m-%dT%H:%M:%S'))
+            feature_idx.append(t0.strftime("%Y-%m-%dT%H:%M:%S"))
 
         xdf = pd.DataFrame(
             data=feature_data,
             index=pd.DatetimeIndex(feature_idx, name="datetime"),
-            columns=['rsam_energy_prop'],
+            columns=["rsam_energy_prop"],
             dtype=float,
         ).to_xarray()
 
-        xdf.attrs['starttime'] = trace.stats.starttime.isoformat()
-        xdf.attrs['endtime'] = trace.stats.endtime.isoformat()
-        xdf.attrs['station'] = trace.stats.station
+        xdf.attrs["starttime"] = trace.stats.starttime.isoformat()
+        xdf.attrs["endtime"] = trace.stats.endtime.isoformat()
+        xdf.attrs["station"] = trace.stats.station
 
         self.feature = xdf
         self.trace = tr

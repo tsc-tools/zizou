@@ -1,28 +1,29 @@
 """
 Train an autoencoder to reduce dimensionality of input features.
 """
+
 import logging
 import math
 import os
 import pickle
+from collections.abc import Sequence
+from typing import List
 
 import numpy as np
 import skfuzzy as fuzz
-from sklearn.preprocessing import MinMaxScaler
-from sklearn.impute import SimpleImputer
-from sklearn.pipeline import make_pipeline
-from sklearn.model_selection import train_test_split
-from sklearn.base import TransformerMixin, BaseEstimator
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader, Dataset
-from typing import List
 import torch.nn.functional as F
 import xarray as xr
 import yaml
+from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.impute import SimpleImputer
+from sklearn.model_selection import train_test_split
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import MinMaxScaler
+from torch.utils.data import DataLoader, Dataset
 
-from zizou import AnomalyDetectionBaseClass, get_data
-import zizou.zizou_logging
+from zizou import AnomalyDetectionBaseClass
 
 logger = logging.getLogger(__name__)
 
@@ -39,13 +40,11 @@ class TiedAutoEncoder(nn.Module):
         a list of size of each layer for the encoder and
         the reverse for the decoder.
     activation : function, optional
-        an activation function to apply for each layer 
+        an activation function to apply for each layer
         (the default is torch.tanh).
     """
-    
-    def __init__(
-            self, in_features: int, h_features: List[int], 
-            activation=F.relu):
+
+    def __init__(self, in_features: int, h_features: List[int], activation=F.relu):
         """Create an autoencoder."""
         super().__init__()
         self.in_features = in_features
@@ -64,13 +63,13 @@ class TiedAutoEncoder(nn.Module):
             self.dec_biases.append(nn.Parameter(torch.DoubleTensor(h)))
         self.dec_biases.append(nn.Parameter(torch.DoubleTensor(in_features)))
         self.reset_parameters()
-        self.loss = torch.nn.MSELoss(reduction='none')
-            
+        self.loss = torch.nn.MSELoss(reduction="none")
+
     def forward(self, x: torch.DoubleTensor):
         """Return result of encoding and decoding."""
         dec = self.encode(x)
         return self.decode(dec)
-    
+
     def encode(self, x: torch.DoubleTensor):
         """Return encoded data."""
         o = x
@@ -78,7 +77,7 @@ class TiedAutoEncoder(nn.Module):
             o = F.linear(o, w, b)
             o = self.activation(o)
         return F.linear(o, self.weights[-1], self.enc_biases[-1])
-    
+
     def decode(self, o: torch.DoubleTensor):
         """Return decoded data."""
         r_weights = list(reversed(self.weights))
@@ -86,7 +85,7 @@ class TiedAutoEncoder(nn.Module):
             o = F.linear(o, w.t(), b)
             o = self.activation(o)
         return F.linear(o, r_weights[-1].t(), self.dec_biases[-1])
-    
+
     def reset_parameters(self):
         """Reset linear module parameters (from nn.Linear)."""
         for w, b in zip(self.weights, self.enc_biases):
@@ -103,8 +102,7 @@ class TiedAutoEncoder(nn.Module):
 
 
 class FuzzyCluster(TransformerMixin, BaseEstimator):
-    def __init__(self, n_clusters=5, error=0.005, maxiter=1000,
-                 init=None):
+    def __init__(self, n_clusters=5, error=0.005, maxiter=1000, init=None):
         self.n_clusters_ = n_clusters
         self.error_ = error
         self.maxiter_ = maxiter
@@ -114,7 +112,7 @@ class FuzzyCluster(TransformerMixin, BaseEstimator):
 
     def fit(self, data, scalerfile, clustercenterfile):
         try:
-            with open(scalerfile, 'rb') as fh:
+            with open(scalerfile, "rb") as fh:
                 self.clusterscaler = pickle.load(fh)
             self.cntr_ = np.load(clustercenterfile)
             self._is_fitted = True
@@ -122,17 +120,19 @@ class FuzzyCluster(TransformerMixin, BaseEstimator):
         except FileNotFoundError:
             data_scaled = self.clusterscaler.fit_transform(data)
             self.cntr_, u, u0, d, jm, p, fpc = fuzz.cluster.cmeans(
-            data_scaled.T, self.n_clusters_, 2, error=0.005, maxiter=1000, init=None)
-            with open(scalerfile, 'wb') as fh:
+                data_scaled.T, self.n_clusters_, 2, error=0.005, maxiter=1000, init=None
+            )
+            with open(scalerfile, "wb") as fh:
                 pickle.dump(self.clusterscaler, fh)
-            np.save(clustercenterfile, self.cntr_) 
+            np.save(clustercenterfile, self.cntr_)
             self._is_fitted = True
 
     def transform(self, data):
         assert self._is_fitted
         data_scaled = self.clusterscaler.transform(data)
         u, u0, d, jm, p, fpc = fuzz.cluster.cmeans_predict(
-        data_scaled.T, self.cntr_, 2, error=0.005, maxiter=1000)
+            data_scaled.T, self.cntr_, 2, error=0.005, maxiter=1000
+        )
         return u
 
     def fit_transform(self, data, scalerfile, clustercenterfile):
@@ -158,59 +158,82 @@ class VUMTData(Dataset):
 
 
 class AutoEncoder(AnomalyDetectionBaseClass):
-    features = ['rsam',
-                'dsar',
-                'central_freq',
-                'predom_freq',
-                'bandwidth',
-                'rsam_energy_prop',
-                'sonogram']
+    features = [
+        "rsam",
+        "dsar",
+        "central_freq",
+        "predom_freq",
+        "bandwidth",
+        "rsam_energy_prop",
+        "sonogram",
+    ]
 
-    transform_dict = {'rsam': 'log'}
+    transform_dict = {"rsam": "log"}
 
-    stack_dict = {'dsar': '2D',
-                  'central_freq': '1h',
-                  'predom_freq': '1h',
-                  'variance': '1h',
-                  'bandwidth': '1h'}
+    stack_dict = {
+        "dsar": "2D",
+        "central_freq": "1h",
+        "predom_freq": "1h",
+        "variance": "1h",
+        "bandwidth": "1h",
+    }
 
-    files = dict(featurefile="autoencoder_features.nc",
-                 modelfile="autoencoder_weights.pth",
-                 scalermodelfile="autoencoder_scaler.pkl",
-                 scalerfile="cluster_scaler.pkl",
-                 clustercenterfile="cluster_center.npy")
-  
-    def __init__(self, configfile):
-        try:
-            with open(configfile, 'r') as fh:
-                c = yaml.safe_load(fh)
-        except OSError:
-            c = yaml.safe_load(configfile)
-        self.layers_ = c['autoencoder'].get('layers', [2000, 500, 200, 6])
-        self.epochs_ = c['autoencoder'].get('epochs', 5)                       
-        self.patience_ = c['autoencoder'].get('patience', 10)
-        self.device_ = c['autoencoder'].get('device', 'cuda') 
- 
-        super(AutoEncoder, self).__init__(self.features, self.stack_dict,
-                                          self.transform_dict)
-        self.device_ = (self.device_
-                        if torch.cuda.is_available()
-                        else 'mps'
-                        if torch.backends.mps.is_available()
-                        else 'cpu')
-        logger.info(f"Using {self.device_} device") 
-        imputer = SimpleImputer(missing_values=np.nan, strategy='median')
+    files = dict(
+        featurefile="autoencoder_features.nc",
+        modelfile="autoencoder_weights.pth",
+        scalermodelfile="autoencoder_scaler.pkl",
+        scalerfile="cluster_scaler.pkl",
+        clustercenterfile="cluster_center.npy",
+    )
+
+    def __init__(
+        self,
+        layers: Sequence = [2000, 500, 200, 6],
+        epochs: int = 5,
+        patience: int = 10,
+        device: str = "cpu",
+        input_dim: int = 14,
+        n_clusters: int = 5,
+        configfile: str = None,
+    ):
+        self.layers_ = layers
+        self.epochs_ = epochs
+        self.patience_ = patience
+        self.device_ = device
+        if configfile is not None:
+            try:
+                with open(configfile, "r") as fh:
+                    c = yaml.safe_load(fh)
+            except OSError:
+                c = yaml.safe_load(configfile)
+            self.layers_ = c["autoencoder"].get("layers", layers)
+            self.epochs_ = c["autoencoder"].get("epochs", epochs)
+            self.patience_ = c["autoencoder"].get("patience", patience)
+            self.device_ = c["autoencoder"].get("device", device)
+
+        super(AutoEncoder, self).__init__(
+            self.features, self.stack_dict, self.transform_dict
+        )
+        self.device_ = (
+            self.device_
+            if torch.cuda.is_available()
+            else "mps"
+            if torch.backends.mps.is_available()
+            else "cpu"
+        )
+        logger.info(f"Using {self.device_} device")
+        imputer = SimpleImputer(missing_values=np.nan, strategy="median")
         scaler = MinMaxScaler()
         self.transformer = make_pipeline(imputer, scaler)
-        self.cluster_ = FuzzyCluster()
+        self.cluster_ = FuzzyCluster(n_clusters=n_clusters)
         self.classifications = None
-        autoencoder_ = TiedAutoEncoder(14, self.layers_)
+        autoencoder_ = TiedAutoEncoder(input_dim, self.layers_)
         self.model_ = autoencoder_.to(self.device_)
         logger.info(self.model_)
-   
+
     def checkpoint(self, model, filename):
         torch.save(model.state_dict(), filename)
-    
+
     def resume(self, model, filename):
         model.load_state_dict(torch.load(filename))
 
@@ -232,7 +255,7 @@ class AutoEncoder(AnomalyDetectionBaseClass):
             if batch % 100 == 0:
                 loss, current = loss.item(), (batch + 1) * len(X)
                 logger.info(f"Training loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
-    
+
     def test(self, dataloader, loss_fn):
         num_batches = len(dataloader)
         self.model_.eval()
@@ -249,28 +272,34 @@ class AutoEncoder(AnomalyDetectionBaseClass):
 
     def _is_fitted(self, store):
         try:
-            self.model_.load_state_dict(torch.load(os.path.join(store.path, self.files['modelfile'])))
-            with open(os.path.join(store.path, self.files['scalermodelfile']), 'rb') as fh:
+            self.model_.load_state_dict(
+                torch.load(os.path.join(store.path, self.files["modelfile"]))
+            )
+            with open(
+                os.path.join(store.path, self.files["scalermodelfile"]), "rb"
+            ) as fh:
                 self.transformer = pickle.load(fh)
             logging.info("Loaded pretrained model.")
         except FileNotFoundError:
             return False
         return True
- 
-    def fit(self, store):
-        if self._is_fitted(store):
+
+    def fit(self, store, new=False):
+        if self._is_fitted(store) and not new:
             return
         optimizer = torch.optim.SGD(self.model_.parameters(), lr=1e-3)
-        data = self.get_features(store, os.path.join(store.path, self.files['featurefile'])).values
+        data = self.get_features(
+            store, os.path.join(store.path, self.files["featurefile"])
+        ).values
         logger.info(f"Scaling features for dataset with shape {data.shape}")
         # Scale values and fill gaps.
         data_norm = self.transformer.fit_transform(data)
-        with open(os.path.join(store.path, self.files['scalermodelfile']), 'wb') as fh:
+        with open(os.path.join(store.path, self.files["scalermodelfile"]), "wb") as fh:
             pickle.dump(self.transformer, fh)
         logger.info("Splitting dataset...")
-        data_norm_train, data_norm_test = train_test_split(data_norm,
-                                                        test_size=.2,
-                                                        train_size=.8)
+        data_norm_train, data_norm_test = train_test_split(
+            data_norm, test_size=0.2, train_size=0.8
+        )
         train_data = VUMTData(data_norm_train, transform=torch.from_numpy)
         test_data = VUMTData(data_norm_test, transform=torch.from_numpy)
         train_dataloader = DataLoader(train_data, batch_size=64, shuffle=True)
@@ -285,43 +314,55 @@ class AutoEncoder(AnomalyDetectionBaseClass):
             if loss < best_loss:
                 best_loss = loss
                 best_epoch = i
-                self.checkpoint(self.model_, os.path.join(store.path, self.files['modelfile'])) 
+                self.checkpoint(
+                    self.model_, os.path.join(store.path, self.files["modelfile"])
+                )
             elif i - best_epoch > self.patience_:
                 logger.info(f"Early stopped training at epoch {i+1}")
                 break
 
     def transform(self, store):
         assert self._is_fitted(store)
+
+        logger.info("Starting transform process.")
         feats = self.get_features(store)
-        dates = feats['datetime']
+        dates = feats["datetime"]
         data = feats.values
+        logger.info(f"Transforming data of shape {data.shape}.")
+        logger.info("Normalising data.")
         data_norm = self.transformer.transform(data)
-        transform_data = VUMTData(data_norm,
-                                  transform=torch.from_numpy)
+        transform_data = VUMTData(data_norm, transform=torch.from_numpy)
+        logger.info("Transforming data.")
         with torch.no_grad():
             X = transform_data[:][0]
             X = X.to(self.device_)
             encoded_data = self.model_.encode(X)
             X_hat = self.model_.decode(encoded_data)
-        
+
         encoded_data = encoded_data.cpu().numpy()
 
         output = {}
+
+        logger.info("Calculating loss between input and decoded output.")
         loss = self.model_.loss(X, X_hat).sum(axis=1)
-        output['autoencoder_loss'] = xr.DataArray(loss.cpu().numpy(),
-                                                    coords=[dates],
-                                                    dims=['datetime'])
-        clustered_data = self.cluster_.fit_transform(encoded_data,
-                                                        os.path.join(store.path, self.files['scalerfile']),
-                                                        os.path.join(store.path, self.files['clustercenterfile']))
+        output["autoencoder_loss"] = xr.DataArray(
+            loss.cpu().numpy(), coords=[dates], dims=["datetime"]
+        )
+        logger.info(f"Clustering embeddings into {self.cluster_.n_clusters_} cluster.")
+        clustered_data = self.cluster_.fit_transform(
+            encoded_data,
+            os.path.join(store.path, self.files["scalerfile"]),
+            os.path.join(store.path, self.files["clustercenterfile"]),
+        )
         cluster_names = list(range(self.cluster_.n_clusters_))
-        output['autoencoder_cluster'] = xr.DataArray(clustered_data,
-                            coords=[cluster_names, dates],
-                            dims=['cluster', 'datetime'])
-        output['autoencoder_embedding'] = xr.DataArray(encoded_data.T,
-                           coords=[list(range(encoded_data.shape[1])),
-                                  dates],
-                           dims=['autodim', 'datetime'])
+        output["autoencoder_cluster"] = xr.DataArray(
+            clustered_data, coords=[cluster_names, dates], dims=["cluster", "datetime"]
+        )
+        output["autoencoder_embedding"] = xr.DataArray(
+            encoded_data.T,
+            coords=[list(range(encoded_data.shape[1])), dates],
+            dims=["autodim", "datetime"],
+        )
         return xr.Dataset(output)
 
     def fit_transform(self, store):

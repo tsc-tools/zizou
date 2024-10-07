@@ -1,3 +1,5 @@
+import logging
+
 import numpy as np
 import obspy.signal.freqattributes
 import obspy.signal.hoctavbands
@@ -10,14 +12,20 @@ import yaml
 from zizou import FeatureBaseClass
 from zizou.util import apply_freq_filter, trace_window_data
 
+logger = logging.getLogger(__name__)
+
 
 class SpectralFeatures(FeatureBaseClass):
-    
-    features = ['central_freq', 'bandwidth', 'predom_freq']
+    features = ["central_freq", "bandwidth", "predom_freq"]
 
-    def __init__(self, interval=600., filtertype='highpass',
-                 filterfreq=(0.5, None), ncep=8,
-                 configfile=None):
+    def __init__(
+        self,
+        interval=600.0,
+        filtertype="highpass",
+        filterfreq=(0.5, None),
+        ncep=8,
+        configfile=None,
+    ):
         super(SpectralFeatures, self).__init__()
         self.interval = float(interval)
         self.filtertype = filtertype
@@ -25,18 +33,18 @@ class SpectralFeatures(FeatureBaseClass):
         self.ncep = int(ncep)
         if configfile is not None:
             try:
-                with open(configfile, 'r') as fh:
+                with open(configfile, "r") as fh:
                     c = yaml.safe_load(fh)
             except OSError:
                 c = yaml.safe_load(configfile)
-            self.interval = c['default'].get('interval', interval)
-            cs = c.get('spectral_features')
+            self.interval = c["default"].get("interval", interval)
+            cs = c.get("spectral_features")
             if cs is not None:
-                self.filtertype = cs.get('filtertype', filtertype) 
-                freqs = cs.get('filterfreq')
+                self.filtertype = cs.get("filtertype", filtertype)
+                freqs = cs.get("filterfreq")
                 if freqs is not None:
-                    self.filterfreq = (freqs['low'], freqs['high'])
-                self.ncep = cs.get('num_cepstral', ncep)
+                    self.filterfreq = (freqs["low"], freqs["high"])
+                self.ncep = cs.get("num_cepstral", ncep)
 
     def compute(self, trace):
         """
@@ -52,9 +60,25 @@ class SpectralFeatures(FeatureBaseClass):
         if len(trace) < 1:
             msg = "Trace is empty."
             raise ValueError(msg)
+
+        logger.info(
+            "Computing spectral features for {} between {} and {}.".format(
+                ".".join(
+                    (
+                        trace.stats.network,
+                        trace.stats.station,
+                        trace.stats.location,
+                        trace.stats.channel,
+                    )
+                ),
+                trace.stats.starttime.isoformat(),
+                trace.stats.endtime.isoformat(),
+            )
+        )
+
         fs = trace.stats.sampling_rate
 
-        keys = ['central_freq', 'bandwidth', 'predom_freq']
+        keys = ["central_freq", "bandwidth", "predom_freq"]
         # keys += [f'cepstral_coef_{ind}' for ind in np.arange(self.ncep)]
 
         # initialise dataframe
@@ -66,17 +90,17 @@ class SpectralFeatures(FeatureBaseClass):
             if np.any(np.isnan(tr_int.data)):
                 vals = np.full(len(keys), np.nan)
             else:
-                tr_int.detrend('constant')
-                tr_int.detrend('linear')
+                tr_int.detrend("constant")
+                tr_int.detrend("linear")
                 apply_freq_filter(tr_int, self.filtertype, self.filterfreq)
                 tr_int_diff = tr_int.differentiate()
 
                 # Calculate psdf
                 nfft = obspy.signal.util.next_pow_2(tr_int_diff.stats.npts)
                 frequency = np.linspace(0, fs, nfft + 1)
-                frequency = frequency[0:nfft // 2]
+                frequency = frequency[0 : nfft // 2]
                 data_f = scipy.fftpack.fft(tr_int_diff.data, nfft)
-                data_psd = np.abs(data_f[0:nfft // 2]) ** 2
+                data_psd = np.abs(data_f[0 : nfft // 2]) ** 2
 
                 # Interpolate onto logspace frequency vector
                 f_ls = np.logspace(-2, 2, 401)  # These constants should be accessible
@@ -90,12 +114,10 @@ class SpectralFeatures(FeatureBaseClass):
                 #     tr_int.data, fs, self.ncep
                 # )
                 vals = [central_freq, bandwidth, predom_freq]
-                #vals = np.concatenate((vals, cepstral_coef, hob), axis=None)
+                # vals = np.concatenate((vals, cepstral_coef, hob), axis=None)
 
             feature_data.append(vals)
-            feature_idx.append(
-                tr_int.stats.starttime.strftime('%Y-%m-%dT%H:%M:%S')
-            )
+            feature_idx.append(tr_int.stats.starttime.strftime("%Y-%m-%dT%H:%M:%S"))
 
         xdf = pd.DataFrame(
             data=feature_data,
@@ -103,9 +125,9 @@ class SpectralFeatures(FeatureBaseClass):
             columns=keys,
             dtype=float,
         ).to_xarray()
-        xdf.attrs['starttime'] = trace.stats.starttime.isoformat()
-        xdf.attrs['endtime'] = trace.stats.endtime.isoformat()
-        xdf.attrs['station'] = trace.stats.station
+        xdf.attrs["starttime"] = trace.stats.starttime.isoformat()
+        xdf.attrs["endtime"] = trace.stats.endtime.isoformat()
+        xdf.attrs["station"] = trace.stats.station
 
         self.feature = xdf
         self.trace = trace
@@ -129,8 +151,8 @@ class SpectralFeatures(FeatureBaseClass):
         zero-th spectral moments. The spectral moments
         are calculated with log-spaced frequencies.
         """
-        m0 = 2 * scipy.integrate.simpson(freq ** 0 * psd)
-        m2 = 2 * scipy.integrate.simpson(freq ** 2 * psd)
+        m0 = 2 * scipy.integrate.simpson(freq**0 * psd)
+        m2 = 2 * scipy.integrate.simpson(freq**2 * psd)
         return np.sqrt(m2 / m0)
 
     @staticmethod
@@ -155,6 +177,6 @@ class SpectralFeatures(FeatureBaseClass):
             nc=ncep,
             p=nfilters,
             n=None,
-            w=window
+            w=window,
         )
         return cep
