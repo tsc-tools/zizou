@@ -47,3 +47,6 @@ zizou = ["data/*.yml"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 log_cli = true
+
+[tool.ruff.lint]
+unfixable = ["F401"]
