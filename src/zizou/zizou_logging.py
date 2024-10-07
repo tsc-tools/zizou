@@ -1,7 +1,8 @@
 import logging
 import logging.config
+import os
 
-DEBUG_LOG_FILENAME = ".zizou-processing.log"
+DEBUG_LOG_FILENAME = os.environ.get("ZIZOULOG", ".zizou-processing.log")
 
 LOGGING_CONFIG = {
     "version": 1,
