@@ -61,7 +61,7 @@
                 </li>
               </ul>
               <ul>
-                <li class="toctree-l1"><a class="reference internal" href="user_guide/">Introduction on how to use zizou</a>
+                <li class="toctree-l1"><a class="reference internal" href="anomaly_detection/">Example on how to use zizou to detect anomalous signals</a>
                 </li>
               </ul>
               <ul>
@@ -112,16 +112,17 @@ use an Autoencoder to detect anomalies in the spectrograms.</p>
 <li>pyyaml</li>
 <li>tonik</li>
 </ul>
-<p>Using the machine learning modules requires the following additional packages:
-* scikit-learn
-* pytorch </p>
+<p>Using the machine learning modules requires the following additional packages:</p>
+<ul>
+<li>scikit-learn</li>
+<li>pytorch </li>
+</ul>
 <h2 id="installation">Installation</h2>
-<p>To only compute features run:</p>
+<p>To install zizou and its requirements (except for scikit-learn and pytorch) run:</p>
 <pre><code>pip install -U zizou
 </code></pre>
-<p>To also use the machine learning modules run:</p>
-<pre><code>pip install -U &quot;zizou[ML]&quot;
-</code></pre>
+<p>To install the machine learning requirements please refer to the respective installation
+pages of <a href="https://scikit-learn.org/stable/install.html">scikit-learn</a> and <a href="https://pytorch.org/get-started/locally/">pytorch</a>.</p>
 <h3 id="installation-from-source">Installation from source</h3>
 <h4 id="setup-conda-environment">Setup conda environment</h4>
 <pre><code>cd zizou 
@@ -153,7 +154,7 @@ kernda -o -y /path/to/jupyter/kernels/zizou/kernel.json
             </div>
           </div><footer>
     <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
-        <a href="user_guide/" class="btn btn-neutral float-right" title="Introduction on how to use zizou">Next <span class="icon icon-circle-arrow-right"></span></a>
+        <a href="anomaly_detection/" class="btn btn-neutral float-right" title="Example on how to use zizou to detect anomalous signals">Next <span class="icon icon-circle-arrow-right"></span></a>
     </div>
 
   <hr/>
@@ -177,7 +178,7 @@ kernda -o -y /path/to/jupyter/kernels/zizou/kernel.json
     
     
     
-      <span><a href="user_guide/" style="color: #fcfcfc">Next &raquo;</a></span>
+      <span><a href="anomaly_detection/" style="color: #fcfcfc">Next &raquo;</a></span>
     
   </span>
 </div>
@@ -196,5 +197,5 @@ kernda -o -y /path/to/jupyter/kernels/zizou/kernel.json
 
 <!--
 MkDocs version : 1.6.0
-Build Date UTC : 2024-10-01 03:04:55.481476+00:00
+Build Date UTC : 2024-10-16 07:41:31.897072+00:00
 -->
