@@ -17,21 +17,19 @@ use an Autoencoder to detect anomalies in the spectrograms.
 * tonik
 
 Using the machine learning modules requires the following additional packages:
+
 * scikit-learn
 * pytorch 
 
 ## Installation
-To only compute features run:
+To install zizou and its requirements (except for scikit-learn and pytorch) run:
 
 ```
 pip install -U zizou
 ```
 
-To also use the machine learning modules run:
-
-```
-pip install -U "zizou[ML]"
-```
+To install the machine learning requirements please refer to the respective installation
+pages of [scikit-learn](https://scikit-learn.org/stable/install.html) and [pytorch](https://pytorch.org/get-started/locally/).
 
 ### Installation from source
 #### Setup conda environment
