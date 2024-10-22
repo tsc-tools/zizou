@@ -6,7 +6,12 @@ from .zizou_logging import setup_logging
 
 setup_logging()
 
-from .anomaly_base import AnomalyDetectionBaseClass
+from .anomaly_base import (
+    AnomalyDetectionBaseClass,
+    SliceBatchSampler,
+    ZizouDataset,
+    min_max_scale_netcdf,
+)
 from .autoencoder import AutoEncoder
 from .data import DataSource, FDSNWaveforms, MockSDSWaveforms, S3Waveforms, SDSWaveforms
 from .dsar import DSAR

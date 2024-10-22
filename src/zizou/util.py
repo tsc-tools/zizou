@@ -1,20 +1,17 @@
 """
 Functionality common to several modules.
 """
-from datetime import datetime
+
 import logging
 import math as M
-import os
+import re
+from datetime import datetime
 
-import h5netcdf
-from cftime import num2date, date2num, date2index
 import numpy as np
-from obspy import UTCDateTime, Trace
 import pandas as pd
-from scipy.signal import chirp, sweep_poly
 import xarray as xr
-from warnings import filterwarnings
-
+from obspy import Trace, UTCDateTime
+from scipy.signal import chirp, sweep_poly
 
 logger = logging.getLogger(__name__)
 
@@ -36,14 +33,14 @@ def stride_windows(x, n, noverlap):
     """
 
     if noverlap >= n:
-        raise ValueError('noverlap must be less than n')
+        raise ValueError("noverlap must be less than n")
     if n < 1:
-        raise ValueError('n cannot be less than 1')
+        raise ValueError("n cannot be less than 1")
 
     if n == 1 and noverlap == 0:
         return x[np.newaxis]
     if n > x.size:
-        raise ValueError('n cannot be greater than the length of x')
+        raise ValueError("n cannot be greater than the length of x")
 
     # np.lib.stride_tricks.as_strided easily leads to memory corruption for
     # non integer shape and strides, i.e. noverlap or n. See #3845.
@@ -53,8 +50,9 @@ def stride_windows(x, n, noverlap):
     step = n - noverlap
     shape = (n, (x.shape[-1] - noverlap) // step)
     strides = (x.strides[0], step * x.strides[0])
-    return np.lib.stride_tricks.as_strided(x, shape=shape, strides=strides,
-                                           writeable=False)
+    return np.lib.stride_tricks.as_strided(
+        x, shape=shape, strides=strides, writeable=False
+    )
 
 
 def demean(x, axis=None):
@@ -73,7 +71,7 @@ def demean(x, axis=None):
     x = np.asarray(x)
 
     if axis is not None and axis + 1 > x.ndim:
-        raise ValueError('axis(=%s) out of bounds' % axis)
+        raise ValueError("axis(=%s) out of bounds" % axis)
 
     return x - np.nanmean(x, axis=axis, keepdims=True)
 
@@ -94,7 +92,7 @@ def apply_hanning(x, return_window=None):
     x = np.asarray(x)
 
     if x.ndim < 1 or x.ndim > 2:
-        raise ValueError('only 1D or 2D arrays can be used')
+        raise ValueError("only 1D or 2D arrays can be used")
 
     xshapetarg = x.shape[0]
     windowVals = np.hanning(xshapetarg) * np.ones(xshapetarg, dtype=x.dtype)
@@ -113,9 +111,9 @@ def apply_hanning(x, return_window=None):
         return windowVals * x
 
 
-def window_array(x, nwin, noverlap,
-                 remove_mean=True, taper=True,
-                 padval=0, return_window=True):
+def window_array(
+    x, nwin, noverlap, remove_mean=True, taper=True, padval=0, return_window=True
+):
     """
     Take a 1-D numpy array and devide it into (overlapping)
     windows.
@@ -144,7 +142,7 @@ def window_array(x, nwin, noverlap,
     :return: Array with the windowed data in columns.
     :rtype: :class:`~numpy.ndarray`
     """
-    x = x.astype('float')
+    x = x.astype("float")
     npts = x.size
     if nwin > npts:
         msg = "window length can't be greater than array length"
@@ -250,9 +248,7 @@ def apply_freq_filter(
 
     if filtertype in ["lp", "lowpass"]:
         if f_max is None:
-            raise ValueError(
-                "Define upper frequency cutoff for low-pass filter."
-            )
+            raise ValueError("Define upper frequency cutoff for low-pass filter.")
         data.filter("lowpass", freq=f_max, **options)
 
     elif filtertype in ["hp", "highpass"]:
@@ -287,10 +283,63 @@ def round_time(time, interval):
     return UTCDateTime(ntime)
 
 
-def generate_test_data(dim=1, ndays=30, nfreqs=10,
-                       tstart=datetime.utcnow(),
-                       feature_name=None,
-                       freq_name=None):
+def stack_feature(xrdata, stack_length, interval="10min"):
+    """
+    Stack features in a dataarray.
+
+    Parameters
+    ----------
+    xrdata : xarray.DataArray
+        The data array to stack.
+    stack_length : str
+        The length of the stack.
+    interval : str, optional
+        The interval between stacks, by default "10min".
+    """
+    num_periods = None
+    valid_stack_units = ["W", "D", "h", "T", "min", "S"]
+    if re.match(r"\d*\s*(\w*)", stack_length).group(1) not in valid_stack_units:
+        raise ValueError(
+            "Stack length should be one of: {}".format(", ".join(valid_stack_units))
+        )
+
+    if pd.to_timedelta(stack_length) < pd.to_timedelta(interval):
+        raise ValueError(
+            "Stack length {} is less than interval {}".format(stack_length, interval)
+        )
+
+    num_periods = pd.to_timedelta(stack_length) / pd.to_timedelta(interval)
+    if not num_periods.is_integer():
+        raise ValueError(
+            "Stack length {} / interval {} = {}, but it needs"
+            " to be a whole number".format(stack_length, interval, num_periods)
+        )
+
+    # Stack features
+    logger.debug("Stacking feature...")
+    try:
+        xdf = xrdata.rolling(
+            datetime=int(num_periods), center=False, min_periods=1
+        ).mean()
+    except ValueError as e:
+        logger.error(e)
+        logger.error(
+            "Stack length {} is not valid for feature {}".format(
+                stack_length, xrdata.name
+            )
+        )
+    else:
+        return xdf
+
+
+def generate_test_data(
+    dim=1,
+    ndays=30,
+    nfreqs=10,
+    tstart=datetime.utcnow(),
+    feature_name=None,
+    freq_name=None,
+):
     """
     Generate a 1D or 2D feature for testing.
     """
@@ -298,43 +347,59 @@ def generate_test_data(dim=1, ndays=30, nfreqs=10,
     assert dim > 0
 
     nints = ndays * 6 * 24
-    dates = pd.date_range(tstart.strftime('%Y-%m-%d'), freq='10min', periods=nints)
+    dates = pd.date_range(tstart.strftime("%Y-%m-%d"), freq="10min", periods=nints)
     rs = np.random.default_rng(42)
     # Random walk as test signal
-    data = np.abs(np.cumsum(rs.normal(0, 8., len(dates))))
+    data = np.abs(np.cumsum(rs.normal(0, 8.0, len(dates))))
     if dim == 2:
         data = np.tile(data, (nfreqs, 1))
     # Add 10% NaNs
-    idx_nan = rs.integers(0, nints-1, int(0.1*nints))
+    idx_nan = rs.integers(0, nints - 1, int(0.1 * nints))
     if dim == 1:
         data[idx_nan] = np.nan
         if feature_name is None:
-            feature_name = 'rsam'
-        xrd = xr.Dataset({feature_name: xr.DataArray(data, coords=[dates], dims=['datetime'])})
+            feature_name = "rsam"
+        xrd = xr.Dataset(
+            {feature_name: xr.DataArray(data, coords=[dates], dims=["datetime"])}
+        )
     if dim == 2:
         data[:, idx_nan] = np.nan
         freqs = np.arange(nfreqs)
         if feature_name is None:
-            feature_name = 'ssam'
+            feature_name = "ssam"
         if freq_name is None:
-            freq_name = 'frequency'
-        xrd = xr.Dataset({feature_name: xr.DataArray(data, coords=[freqs, dates], dims=[freq_name, 'datetime'])})
-    xrd.attrs['starttime'] = UTCDateTime(dates[0]).isoformat()
-    xrd.attrs['endtime'] = UTCDateTime(dates[-1]).isoformat()
-    xrd.attrs['station'] = 'MDR'
+            freq_name = "frequency"
+        xrd = xr.Dataset(
+            {
+                feature_name: xr.DataArray(
+                    data, coords=[freqs, dates], dims=[freq_name, "datetime"]
+                )
+            }
+        )
+    xrd.attrs["starttime"] = UTCDateTime(dates[0]).isoformat()
+    xrd.attrs["endtime"] = UTCDateTime(dates[-1]).isoformat()
+    xrd.attrs["station"] = "MDR"
     return xrd
 
 
-def test_signal(nsec=3600, sampling_rate=100.,
-                frequencies=[0.1, 3.0, 10.0],
-                amplitudes=[0.1, 1.0, 0.7],
-                phases=[0.0, np.pi*0.25, np.pi],
-                offsets=[0., 0., 0.],
-                starttime=UTCDateTime(1970, 1, 1),
-                gaps=False,  noise=True, noise_std=.5,
-                sinusoid=True,addchirp=True,
-                network='NZ', station='BLUB', location='',
-                channel='HHZ'):
+def test_signal(
+    nsec=3600,
+    sampling_rate=100.0,
+    frequencies=[0.1, 3.0, 10.0],
+    amplitudes=[0.1, 1.0, 0.7],
+    phases=[0.0, np.pi * 0.25, np.pi],
+    offsets=[0.0, 0.0, 0.0],
+    starttime=UTCDateTime(1970, 1, 1),
+    gaps=False,
+    noise=True,
+    noise_std=0.5,
+    sinusoid=True,
+    addchirp=True,
+    network="NZ",
+    station="BLUB",
+    location="",
+    channel="HHZ",
+):
     """
     Produce a test signal for which we know where the peaks
     are in the spectrogram.
@@ -363,19 +428,24 @@ def test_signal(nsec=3600, sampling_rate=100.,
     # Some constant signals with different phases
     for f, A, ph, dt in zip(frequencies, amplitudes, phases, offsets):
         _s = np.zeros(t.size)
-        dt_idx = int(dt*sampling_rate)
-        _s[dt_idx:]= A * np.sin(2.0 * np.pi * f * t[dt_idx:] + ph)
+        dt_idx = int(dt * sampling_rate)
+        _s[dt_idx:] = A * np.sin(2.0 * np.pi * f * t[dt_idx:] + ph)
         signals.append(_s)
     if addchirp:
         # Frequency-swept signals
         # Chirp
-        s4 = 0.8 * chirp(t, 5, t[-1], 15, method='quadratic')
+        s4 = 0.8 * chirp(t, 5, t[-1], 15, method="quadratic")
         signals.append(s4)
 
     if sinusoid:
         vals = [6]
         for k in range(0, 7):
-            vals.append(2*(-1)**k*np.power(2*np.pi/nsec, 2*k+1)/M.factorial(2*k+1))
+            vals.append(
+                2
+                * (-1) ** k
+                * np.power(2 * np.pi / nsec, 2 * k + 1)
+                / M.factorial(2 * k + 1)
+            )
             vals.append(0)
         p = np.poly1d(np.array(vals[::-1]))
         s5 = sweep_poly(t, p)
@@ -384,7 +454,7 @@ def test_signal(nsec=3600, sampling_rate=100.,
     # add some noise
     if noise:
         rs = np.random.default_rng(42)
-        noise = rs.normal(loc=0., scale=noise_std, size=t.size)
+        noise = rs.normal(loc=0.0, scale=noise_std, size=t.size)
         for s in signals:
             noise += s
         signal = noise
@@ -392,19 +462,23 @@ def test_signal(nsec=3600, sampling_rate=100.,
         signal = signals[0]
         for s in signals[1:]:
             signal += s
-    stats = {'network': network, 'station': station, 'location': location,
-             'channel': channel, 'npts': len(signal),
-             'sampling_rate': sampling_rate,
-             'mseed': {'dataquality': 'D'}}
-    stats['starttime'] = starttime
-    stats['endtime'] = stats['starttime'] + nsec
+    stats = {
+        "network": network,
+        "station": station,
+        "location": location,
+        "channel": channel,
+        "npts": len(signal),
+        "sampling_rate": sampling_rate,
+        "mseed": {"dataquality": "D"},
+    }
+    stats["starttime"] = starttime
+    stats["endtime"] = stats["starttime"] + nsec
     if gaps:
         p1 = (0.27, 0.33)
         p2 = (0.69, 0.83)
-        p3 = (.95, 1)
+        p3 = (0.95, 1)
         for pmin, pmax in [p1, p2, p3]:
             idx0 = int(pmin * nsec * sampling_rate)
             idx1 = int(pmax * nsec * sampling_rate)
             signal[idx0:idx1] = np.nan
     return Trace(data=signal, header=stats)
-

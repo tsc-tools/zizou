@@ -47,7 +47,7 @@ LOGGING_CONFIG = {
     },
     "loggers": {
         "zizou": {  # The name of the logger, this SHOULD match your module!
-            "level": "DEBUG",
+            "level": "INFO",
             "handlers": [
                 "simple",
                 "logfile",
