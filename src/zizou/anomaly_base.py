@@ -118,7 +118,8 @@ class ZizouDataset(Dataset):
                     else:
                         if nsamples != value:
                             msg = "Number of samples is not consistent."
-                            msg += f"Expected {nsamples}, got {value}."
+                            msg += f"Expected {nsamples}, got {value}"
+                            msg += f"for feature: {feature}"
                             raise ValueError(msg)
         return (nsamples, nfeatures)
 
@@ -281,27 +282,3 @@ class AnomalyDetectionBaseClass(object):
         """
         msg = "'compute_anomaly_index' is not implemented yet"
         raise NotImplementedError(msg)
-
-    def get_features(self, data, featurefile=None):
-        try:
-            feats = xr.open_dataarray(featurefile)
-        except (FileNotFoundError, ValueError):
-            features = []
-            for _f in self.features:
-                logger.info(f"Reading feature {_f}.")
-                feat = data(_f, self.stacks.get(_f, None))
-                if _f == "sonogram":
-                    for c in range(feat.shape[0]):
-                        da = feat[c].reset_coords(names=["sonofrequency"], drop=True)
-                        feat_name = "sonogram_{:d}".format(c)
-                        features.append(da.rename(feat_name))
-                else:
-                    if self.transforms.get(_f, None) == "log":
-                        features.append(np.log10(feat))
-                    else:
-                        features.append(feat)
-
-            feats = xr.merge(features).to_array()
-            if featurefile is not None:
-                feats.to_netcdf(featurefile)
-        return feats.transpose("datetime", "variable")
