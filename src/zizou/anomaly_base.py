@@ -1,3 +1,4 @@
+import copy
 import datetime
 import json
 import logging
@@ -59,7 +60,7 @@ class ZizouDataset(Dataset):
     def __init__(self, store, features, target_transform=None, feature_transforms=None):
         self.target_transform = target_transform
         self.feature_transforms = feature_transforms
-        self.store = store
+        self.store = copy.copy(store)
         self.features = features
         self.resolution = None
         self.starttime = store.starttime
@@ -120,7 +121,7 @@ class ZizouDataset(Dataset):
                             msg = "Number of samples is not consistent."
                             msg += f"Expected {nsamples}, got {value}"
                             msg += f"for feature: {feature}"
-                            raise ValueError(msg)
+                            logger.warning(msg)
         return (nsamples, nfeatures)
 
     def load_and_scale_feature(self, feature):
