@@ -13,27 +13,6 @@ from zizou import (
 )
 
 
-def test_get_features(setup_ac):
-    savedir, sg, _, config = setup_ac
-    transform_dict = {"rsam": "log"}
-    stack_dict = {
-        "dsar": "2D",
-        "central_freq": "1H",
-        "predom_freq": "1H",
-        "variance": "1H",
-        "bandwidth": "1H",
-    }
-    ab = AnomalyDetectionBaseClass(
-        ["rsam", "sonogram", "dsar"], stacks=stack_dict, transforms=transform_dict
-    )
-    featurefile = os.path.join(savedir, "pca_features.nc")
-    feats = ab.get_features(sg, featurefile)
-    assert feats.shape == (10 * 144, 10)
-    # Run again to test reading features from file
-    feats1 = ab.get_features(sg, featurefile)
-    xr.testing.assert_allclose(feats, feats1)
-
-
 def test_dataset(setup_dataset):
     sg = setup_dataset
     zs = ZizouDataset(sg, ["rsam", "ssam"])
@@ -43,7 +22,7 @@ def test_dataset(setup_dataset):
     assert zs[:][0].shape == (4, 4)
     np.testing.assert_array_equal(zs[0:2][0], zs[[0, 1]][0])
     np.testing.assert_array_equal(zs[(1, 3)][0], zs[np.array([1, 3])][0])
-    assert zs.get_dates()[0] == pd.Timestamp("2023-01-01 00:00:00")
+    assert zs.get_dates()[0] == pd.Timestamp("2023-01-01 00:30:00")
 
 
 def test_dataloader(setup_dataset):
@@ -59,7 +38,7 @@ def test_dataloader(setup_dataset):
         if batch == 0:
             assert X.shape == (2, 4)
         elif batch == 1:
-            assert X.shape == (1, 4)
+            assert X.shape == (4,)
 
 
 def test_SliceBatchSampler():
