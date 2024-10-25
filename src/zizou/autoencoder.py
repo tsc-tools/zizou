@@ -346,7 +346,6 @@ class AutoEncoder(AnomalyDetectionBaseClass):
                     dims=["autodim", "datetime"],
                 )
                 xds = xr.Dataset(output)
-                xds.attrs["station"] = self.store.station
                 self.store.save(xds)
 
     def fit_transform(self, starttime, endtime):
