@@ -19,7 +19,7 @@ Upload to pypi:
 ```
 python3 -m twine upload dist/*
 ```
-When prompted for the username enter `__token__` and paste in your pypi token as the password.
+When prompted for the username enter `__token__` and paste in your pypi token as the password. To avoid having to enter your token everytime you can setup a `.pypirc` file as described [here](https://packaging.python.org/en/latest/specifications/pypirc/).
 
 ## Documentation
 Install the [mkdocs](https://www.mkdocs.org/) package as well as the [mkdocstrings](https://mkdocstrings.github.io/) 
