@@ -2,10 +2,6 @@ import importlib
 from os import PathLike
 from typing import Optional
 
-from .zizou_logging import setup_logging
-
-setup_logging()
-
 from .anomaly_base import (
     AnomalyDetectionBaseClass,
     SliceBatchSampler,
