@@ -2,29 +2,23 @@ import importlib
 from os import PathLike
 from typing import Optional
 
-from .anomaly_base import (
-    AnomalyDetectionBaseClass,
-    SliceBatchSampler,
-    ZizouDataset,
-    min_max_scale_netcdf,
-)
-from .autoencoder import AutoEncoder
+try:
+    from .anomaly_base import (
+        AnomalyDetectionBaseClass,
+        SliceBatchSampler,
+        ZizouDataset,
+        min_max_scale_netcdf,
+    )
+    from .autoencoder import AutoEncoder
+except (ModuleNotFoundError, ImportError):
+    pass
+
 from .data import DataSource, FDSNWaveforms, MockSDSWaveforms, S3Waveforms, SDSWaveforms
 from .dsar import DSAR
 from .feature_base import FeatureBaseClass
 from .rsam import RSAM, EnergyExplainedByRSAM
 from .spectral_features import SpectralFeatures
 from .ssam import SSAM
-
-__all__ = [
-    "AnomalyDetectionBaseClass",
-    "FeatureRequest",
-    "FeatureBaseClass",
-    "RSAM",
-    "SpectralFeatures",
-    "SSAM",
-    "get_data",
-]
 
 
 def get_data(filename: Optional[PathLike] = None) -> str:
