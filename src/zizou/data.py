@@ -741,6 +741,8 @@ class DataSource:
         while t_end <= end:
             tr = Trace()
             try:
+                if not cache:
+                    raise AttributeError
                 # First check the cache
                 st = self.cache_client.get_waveforms(
                     net, site, loc, comp, t_start, t_end, dtype="float64"
