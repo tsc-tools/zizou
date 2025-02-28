@@ -1,5 +1,5 @@
 """
-Compute the Real-time Seismic-Amplitude Measurement (RSAM).
+Compute the Real-time Seismic-Amplitude Measurement (RSAM) and the Energy explained by RSAM (rsam_energy_prop).
 """
 
 import logging
@@ -9,23 +9,15 @@ import pandas as pd
 import scipy.integrate
 import xarray as xr
 import yaml
-from obspy import UTCDateTime
+from obspy.signal.filter import bandpass
+from obspy import Trace
 
 from zizou import FeatureBaseClass
-from zizou.util import (
-    apply_freq_filter,
-    round_time,
-    trace_window_data,
-    trace_window_times,
-)
+from zizou.util import window_array
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["RSAM", "EnergyExplainedByRSAM"]
-
-
-def rsam(arr, axis=None):
-    return np.absolute(arr).mean(axis=axis)
+__all__ = ["RSAM"]
 
 
 def rsam_wideband_energy_ratio(arr_rsam, arr_wideband, axis=-1):
@@ -36,39 +28,43 @@ def rsam_wideband_energy_ratio(arr_rsam, arr_wideband, axis=-1):
 
 class RSAM(FeatureBaseClass):
     """
-    RSAM is the mean of the absolute value of a signal filtered
-    between 2 and 5 Hz.
-
+    Compute RSAM as the mean of the absolute value of a signal filtered
+    by default between 2 and 5 Hz and the proportion of signal energy in the RSAM
+    bandwidth, relative to a 0.5-10 Hz bandwidth.
+ 
     :param interval: Length of the time interval in seconds over
                      which to compute RSAM.
     :type interval: int, optional
-    :param filtertype: The type of filtering that is applied before
-                       computing RSAM. Can be either band-pass ('bp'),
-                       high-pass ('hp'), or low-pass ('lp').
-    :type filtertype: str, optional
-    :param filterfreq: The low and high cutoff frequency. If filtertype is
-                       highpass or lowpass, only the first or last value is
-                       used, respectively.
-
+    :param per_lap: If the value is less than 1 it is treated as the percentage
+                    of segment overlap; else it is the step size in sample points
+    :type per_lap: float or int
+    :param timestamp: Can be either 'center' or 'start'. If 'center', the
+                      timestamp of each value is the center of the windows
+                      from which the value was computed. If 'start' it is
+                      the timestamp of the first sample of the first window.
+    :type timestamp: str
+    :param filterfreq: The low and high cutoff frequency for bandpass filter.
     :type filterfreq: tuple, optional
+    :param configfile: Configuration as a .yml file or a dictionary.
+    :type configfile: str or dict
     """
 
-    features = ["rsam"]
+    features = ["rsam", "rsam_energy_prop"]
 
     def __init__(
         self,
         interval=600.0,
-        filtertype="bandpass",
+        per_lap=0,
+        timestamp="start",
         filterfreq=(2, 5),
         configfile=None,
-        reindex=True,
     ):
         super(RSAM, self).__init__()
         self.interval = interval
-        self.filtertype = filtertype
+        self.per_lap = per_lap
+        self.timestamp = timestamp
         self.filterfreq = filterfreq
         self.feature = None
-        self.reindex = reindex
 
         if configfile is not None:
             try:
@@ -79,13 +75,12 @@ class RSAM(FeatureBaseClass):
             self.interval = c["default"].get("interval", interval)
             cr = c.get("rsam")
             if cr is not None:
-                self.filtertype = cr.get("filtertype", filtertype)
+                self.per_lap = cr.get("per_lap", per_lap)
                 freq = cr.get("filterfreq")
                 if freq is not None:
                     self.filterfreq = (freq["low"], freq["high"])
-                self.reindex = cr.get("reindex", reindex)
 
-    def compute(self, trace):
+    def compute(self, trace: Trace) -> xr.Dataset:
         """
         :param trace: The seismic waveform data
         :type trace: :class:`obspy.Trace`
@@ -109,163 +104,52 @@ class RSAM(FeatureBaseClass):
         )
 
         tr = trace.copy()
-        starttime = tr.stats.starttime
-        endtime = tr.stats.endtime
+        # convert to nanometres so dealing with whole numbers
+        npts = tr.stats.npts
+        Fs = tr.stats.sampling_rate
 
-        # handle gaps (i.e. NaNs)
-        mdata = np.ma.masked_invalid(tr.data)
-        tr.data = mdata
-        st = tr.split()
+        # handle gaps (i.e. NaNs) by interpolating across gaps and
+        # filling gaps at the beginning and end with zeros
+        nans = np.isnan(tr.data)
+        indices = np.arange(npts)
+        tr.data[nans] = np.interp(indices[nans], indices[~nans],
+                                  tr.data[~nans], left=0., right=0.)
 
-        apply_freq_filter(st, self.filtertype, self.filterfreq)
-        st.merge(fill_value=np.nan)
-        st.trim(starttime, endtime, pad=True, fill_value=np.nan)
-        tr = st[0]
+        interval = min(self.interval * Fs, npts)
+        if self.per_lap < 1.0:
+            noverlap = int(interval * float(self.per_lap))
+        else:
+            noverlap = interval - self.per_lap
 
-        # initialise dataframe
-        feature_data = []
-        feature_idx = []
+        tr_win = window_array(tr.data, int(interval), noverlap,
+                              taper=False, return_window=False)
+        tr_win = np.transpose(tr_win)
+        rsam = bandpass(tr_win, self.filterfreq[0],
+                        self.filterfreq[1], Fs, corners=4, zerophase=False)
+        rsam_wb = bandpass(tr_win, .5, 10., Fs, corners=4, zerophase=False)
+        energy_ratio = rsam_wideband_energy_ratio(rsam, rsam_wb)
 
-        # loop through data in interval blocks
-        for trint in trace_window_data(tr, self.interval, min_len=0.8):
-            absolute = np.absolute(trint.data)  # absolute value
-            trint.data = absolute  # assign back to trace
-            mean = trint.data.mean()
-            # convert to nanometres so dealing with whole numbers
-            feature_data.append(mean / 1e-9)
-            feature_idx.append(trint.stats.starttime.strftime("%Y-%m-%dT%H:%M:%S"))
+        rsam = np.absolute(rsam).mean(axis=-1)
+        rsam /= 1e-9
+
+        # Calculate time stamps
+        steplength = interval - noverlap
+        steps = np.arange(rsam.shape[0]) * steplength
+        if self.timestamp == "center":
+            t = (steps + interval / 2) / Fs
+        elif self.timestamp == "start":
+            t = steps / Fs
+        datetime = [(trace.stats.starttime + _t).datetime for _t in t] 
 
         xda = xr.DataArray(
-            feature_data, coords=[pd.DatetimeIndex(feature_idx)], dims="datetime"
+            rsam, coords=[pd.DatetimeIndex(datetime)], dims="datetime"
         )
-        xdf = xr.Dataset({"rsam": xda})
+        xdb = xr.DataArray(
+            energy_ratio, coords=[pd.DatetimeIndex(datetime)], dims="datetime"
+        )        
+        xdf = xr.Dataset({"rsam": xda, "rsam_energy_prob": xdb})
         xdf.attrs["starttime"] = trace.stats.starttime.isoformat()
         xdf.attrs["endtime"] = trace.stats.endtime.isoformat()
         xdf.attrs["station"] = trace.stats.station
-        if self.reindex:
-            starttime = UTCDateTime(str(xda.datetime.data[0]))
-            starttime = round_time(starttime, self.interval)
-            endtime = UTCDateTime(str(xda.datetime.data[-1]))
-            endtime = round_time(endtime, self.interval)
-            new_index = pd.date_range(
-                starttime.datetime, endtime.datetime, freq="%dS" % int(self.interval)
-            )
-            xdf = xdf.reindex(dict(datetime=new_index), method="nearest")
         self.feature = xdf
-        return self.feature
-
-
-class EnergyExplainedByRSAM(RSAM):
-    """
-    The proportion of signal energy in the RSAM
-    bandwidth, relative to a 0.5-10 Hz bandwidth.
-    """
-
-    features = ["rsam_energy_prop"]
-
-    def __init__(
-        self,
-        interval=600.0,
-        filtertype=None,
-        filterfreq=(None, None),
-        filtertype_wb="bandpass",
-        filterfreq_wb=(0.5, 10.0),
-        configfile=None,
-    ):
-        super(EnergyExplainedByRSAM, self).__init__(
-            interval=interval,
-            filtertype=filtertype,
-            filterfreq=filterfreq,
-            configfile=configfile,
-        )
-        self.filtertype_wb = filtertype_wb
-        self.filterfreq_wb = filterfreq_wb
-
-        # base params already read from configfile during superclass init
-        # reopen and extract wideband filter params if any
-        if configfile is not None:
-            try:
-                with open(configfile, "r") as fh:
-                    c = yaml.safe_load(fh)
-            except OSError:
-                c = yaml.safe_load(configfile)
-            cr = c.get("rsam")
-            if cr is not None:
-                self.filtertype_wb = cr.get("filtertype_wb", filtertype_wb)
-                freq = cr.get("filterfreq_wb")
-                if freq is not None:
-                    self.filterfreq_wb = (freq["low"], freq["high"])
-
-    def compute(self, trace):
-        """
-        :param trace: The seismic waveform data
-        :type trace: :class:`obspy.Trace`
-        """
-        if len(trace) < 1:
-            msg = "Trace is empty."
-            raise ValueError(msg)
-
-        logger.info(
-            "Computing Energy explained by RSAM for {} between {} and {}.".format(
-                ".".join(
-                    (
-                        trace.stats.network,
-                        trace.stats.station,
-                        trace.stats.location,
-                        trace.stats.channel,
-                    )
-                ),
-                trace.stats.starttime.isoformat(),
-                trace.stats.endtime.isoformat(),
-            )
-        )
-
-        tr = trace.copy()
-        starttime = tr.stats.starttime
-        endtime = tr.stats.endtime
-
-        # handle gaps (i.e. NaNs)
-        mdata = np.ma.masked_invalid(tr.data)
-        tr.data = mdata
-
-        st_rsam = tr.split()
-        st_wb = st_rsam.copy()
-
-        apply_freq_filter(st_rsam, self.filtertype, self.filterfreq)
-        st_rsam.merge(fill_value=np.nan)
-        st_rsam.trim(starttime, endtime, pad=True, fill_value=np.nan)
-        tr_rsam = st_rsam[0]
-
-        # Get trace in wide bandwidth
-        apply_freq_filter(st_wb, self.filtertype_wb, self.filterfreq_wb)
-        st_wb.merge(fill_value=np.nan)
-        st_wb.trim(starttime, endtime, pad=True, fill_value=np.nan)
-        tr_wb = st_wb[0]
-
-        # initialise dataframe
-        feature_data = []
-        feature_idx = []
-
-        # loop through data in interval blocks
-        for t0, t1 in trace_window_times(tr_rsam, self.interval, min_len=0.8):
-            energy_ratio = rsam_wideband_energy_ratio(
-                tr_rsam.slice(t0, t1, nearest_sample=False).data,
-                tr_wb.slice(t0, t1, nearest_sample=False).data,
-            )
-            feature_data.append(energy_ratio)
-            feature_idx.append(t0.strftime("%Y-%m-%dT%H:%M:%S"))
-
-        xdf = pd.DataFrame(
-            data=feature_data,
-            index=pd.DatetimeIndex(feature_idx, name="datetime"),
-            columns=["rsam_energy_prop"],
-            dtype=float,
-        ).to_xarray()
-
-        xdf.attrs["starttime"] = trace.stats.starttime.isoformat()
-        xdf.attrs["endtime"] = trace.stats.endtime.isoformat()
-        xdf.attrs["station"] = trace.stats.station
-
-        self.feature = xdf
-        self.trace = tr
         return self.feature

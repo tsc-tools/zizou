@@ -16,7 +16,7 @@ except (ModuleNotFoundError, ImportError):
 from .data import DataSource, FDSNWaveforms, MockSDSWaveforms, S3Waveforms, SDSWaveforms
 from .dsar import DSAR
 from .feature_base import FeatureBaseClass
-from .rsam import RSAM, EnergyExplainedByRSAM
+from .rsam import RSAM
 from .spectral_features import SpectralFeatures
 from .ssam import SSAM
 
