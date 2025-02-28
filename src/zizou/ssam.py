@@ -47,7 +47,7 @@ class SSAM(FeatureBaseClass):
                          interpolation over the first interval and then
                          downsample using the mean over the second interval.
     :type resample_int: (str, str)
-    :param configfile: Configuration as an .ini file or a dictionary.
+    :param configfile: Configuration as a .yml file or a dictionary.
     :type configfile: str or dict
 
     >>> from zizou.ssam import SSAM, test_signal
