@@ -187,7 +187,7 @@ def setup_sds():
     test_data_dir = os.path.join(os.environ["HOME"], "zizou_test_data")
     os.makedirs(test_data_dir, exist_ok=True)
     if not os.path.exists(os.path.join(test_data_dir, "sds_test")):
-        url = "https://zenodo.org/records/13377159/files/zizou_test_data.tar.gz"
+        url = "https://zenodo.org/records/14942280/files/zizou_test_data.tar.gz"
         download_and_extract_tar(url, test_data_dir)
     sds_dir = os.path.join(test_data_dir, "sds_test")
     fdsn_urls = ("https://service.geonet.org.nz", "https://service-nrt.geonet.org.nz")
