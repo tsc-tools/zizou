@@ -9,7 +9,7 @@ FROM $BASE_CONTAINER AS base
 USER root
 
 COPY  ./environment.yml .
-RUN --mount=type=cache,target=$HOME/.conda/pkgs mamba env create -p /env -f environment.yml
+RUN --mount=type=cache,target=$HOME/.conda/pkgs mamba env create -p /zizou -f environment.yml
 
 FROM $BASE_CONTAINER AS ops 
 
@@ -38,11 +38,11 @@ COPY fix-permissions /usr/local/bin/fix-permissions
 RUN groupadd -g $D_GID $D_GROUP && \
     useradd -m -s /bin/bash -N -u $D_UID -G $D_GROUP $D_USER && \
     chmod a+rx /usr/local/bin/fix-permissions && \
-    mkdir /env && \
+    mkdir /zizou && \
     mkdir $HOME/data && \
     mkdir -p $HOME/.conda/pkgs && \
     fix-permissions $HOME && \
-    fix-permissions /env && \
+    fix-permissions /zizou && \
     fix-permissions $HOME/data && \
     fix-permissions $CONDA_DIR
 
@@ -50,9 +50,9 @@ USER $D_USER
 
 ARG WORKDIR=$HOME
 WORKDIR $WORKDIR
-COPY --from=BASE --chown=${D_USER}:${D_GID} /env /env
+COPY --from=BASE --chown=${D_USER}:${D_GID} /zizou /zizou
 COPY --chown=$D_USER:users . .
-RUN /env/bin/pip install -e .
+RUN /zizou/bin/pip install -e .
 
 FROM $BASE_CONTAINER AS dev 
 
@@ -81,11 +81,11 @@ COPY fix-permissions /usr/local/bin/fix-permissions
 RUN groupadd -g $D_GID $D_GROUP && \
     useradd -m -s /bin/bash -N -u $D_UID -G $D_GROUP $D_USER && \
     chmod a+rx /usr/local/bin/fix-permissions && \
-    mkdir /env && \
+    mkdir /zizou && \
     mkdir $HOME/data && \
     mkdir -p $HOME/.conda/pkgs && \
     fix-permissions $HOME && \
-    fix-permissions /env && \
+    fix-permissions /zizou && \
     fix-permissions $HOME/data && \
     fix-permissions $CONDA_DIR
 
@@ -93,5 +93,5 @@ USER $D_USER
 
 ARG WORKDIR=$HOME
 WORKDIR $WORKDIR
-COPY --from=BASE --chown=${D_USER}:${D_GID} /env /env
+COPY --from=BASE --chown=${D_USER}:${D_GID} /zizou /zizou
 COPY --chown=$D_USER:users . .

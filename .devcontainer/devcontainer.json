@@ -21,7 +21,7 @@
 	// "forwardPorts": [],
 
 	// Uncomment the next line to run commands after the container is created.
-	"postCreateCommand": "/env/bin/pip install -e .",
+	"postCreateCommand": "/zizou/bin/pip install -e .",
 
 	// Configure tool-specific properties.
 	"customizations": {
