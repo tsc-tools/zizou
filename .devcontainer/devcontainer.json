@@ -19,7 +19,7 @@
 
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.
 	// "forwardPorts": [],
-
+	"mounts": [{"source": "/scratch/VUMT", "target": "/home/zizou/data", "type": "bind"}],
 	// Uncomment the next line to run commands after the container is created.
 	"postCreateCommand": "/zizou/bin/pip install -e .",
 
