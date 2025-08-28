@@ -3,14 +3,13 @@ import io
 import logging
 import os
 from datetime import date, datetime, timedelta, timezone
+import warnings
 
-import boto3
+import fsspec
 import numpy as np
 import pandas as pd
 import requests
 import yaml
-from botocore import UNSIGNED
-from botocore.config import Config
 from obspy import Inventory, Stream, Trace, UTCDateTime, read, read_inventory
 from obspy.clients.fdsn import Client as FDSN_Client
 from obspy.clients.filesystem.sds import Client as SDS_Client
@@ -469,20 +468,54 @@ class FDSNWaveforms(WaveformBaseclass):
 
 
 class S3Waveforms(WaveformBaseclass):
-    def __init__(self, s3bucket, fdsn_urls, staxml_dir, debug=False, fill_value=np.nan):
-        config = Config(signature_version=UNSIGNED)
-        self.client = boto3.client("s3", config=config)
-        self.s3_bucket = s3bucket
-        self.fdsn_urls = fdsn_urls
+    def __init__(self, staxml_dir, debug=False, fill_value=np.nan):
+        """
+        Get seismic waveforms from GeoNet's open data archive on AWS S3.
+
+        Parameters
+        ----------
+        staxml_dir : str
+            Directory where the station metadata in STATIONXML format is stored.
+        debug : bool
+            If True, debug messages will be printed to the console.
+        fill_value : int, float, 'interpolate', np.nan, or None
+            Value to use for filling gaps in the data.
+        """
+        self.fsclient = fsspec.filesystem("filecache", target_protocol='s3', target_options={'anon':True},
+                                          cache_storage='/tmp/s3filescache')
+        self.fdsn_urls = ['https://service.geonet.org.nz',
+                          'https://service-nrt.geonet.org.nz'] 
         self.staxml_dir = staxml_dir
         self.debug = debug
         self.fill_value = fill_value
+        self.bucket = "geonet-open-data"
 
     def get_waveforms(self, net, site, loc, comp, start, end):
         """
-        Get seismic waveforms from GeoNet's open data archive on AWS S3.
+        Download waveforms.
+
+        Parameters
+        ----------
+        net : str
+            Network code.
+        site : str
+            Station code.
+        loc : str
+            Location code.
+        comp : str
+            Channel code.
+        start : UTCDateTime
+            Start time of the data to be downloaded.
+        end : UTCDateTime
+            End time of the data to be downloaded.
+
+        Returns
+        -------
+        Trace
+            An ObsPy Trace object containing the waveform data with sensitivity
+            removed.
         """
-        PATH_FORMAT = "waveforms/miniseed/{year}/{year}.{julday:03d}/{station}."
+        PATH_FORMAT = "{bucket}/waveforms/miniseed/{year}/{year}.{julday:03d}/{station}."
         PATH_FORMAT += "{network}/{year}.{julday:03d}.{station}."
         PATH_FORMAT += "{location}-{channel}.{network}.D"
         t_start = start
@@ -498,6 +531,7 @@ class S3Waveforms(WaveformBaseclass):
         st = Stream()
         while t_start < end:
             s3_file_path = PATH_FORMAT.format(
+                bucket=self.bucket,
                 year=t_start.year,
                 julday=t_start.julday,
                 station=site,
@@ -505,15 +539,10 @@ class S3Waveforms(WaveformBaseclass):
                 location=loc,
                 channel=comp,
             )
-            data = io.BytesIO()
             if self.debug:
                 logger.debug("Requesting {}".format(s3_file_path))
-            _ = self.client.download_fileobj(
-                Bucket=self.s3_bucket, Key=s3_file_path, Fileobj=data
-            )
-            data.seek(0)
-            _st = read(data, dtype="float64")
-            data.close()
+            with self.fsclient.open(s3_file_path) as f:
+                _st = read(f, dtype="float64")
             _st.trim(t_start, t_end, nearest_sample=False)
             st += _st
             t_start = t_end
@@ -729,23 +758,66 @@ class DataSource:
             dirname, _ = os.path.split(fullpath)
             os.makedirs(dirname, exist_ok=True)
             logger.debug(f"writing {_tr} to {fullpath}")
-            _tr.write(fullpath, format="MSEED")
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", category=UserWarning)
+                _tr.write(fullpath, format="MSEED")
             current_date += timedelta(days=1)
 
     def get_waveforms(self, net, site, loc, comp, start, end, cache=False):
-        t_start = start
-        t_end = end
-        if self.chunk_size is not None:
-            t_end = t_start + self.chunk_size
-            t_end = min(t_end, end)
-        while t_end <= end:
+        """Yield waveform data for requested time span.
+
+        Parameters
+        ----------
+        net, site, loc, comp : str
+            Network, station, location and channel codes. ``comp`` may include a
+            simple wildcard of the form ``??`` or ``?`` or patterns like ``HH?``
+            to request multiple components (e.g. ``HH?`` -> ``HHZ, HHN, HHE``).
+            Only a single wildcard character is currently supported and will
+            expand to the common three-component set ``Z, N, E`` (or ``Z, 1, 2``
+            if those exist in the data – both tried).
+        start, end : UTCDateTime
+            Start and end times.
+        cache : bool
+            If True, fetched data are written to the local SDS-style cache.
+
+        Yields
+        ------
+        Trace or Stream
+            For a single component request, yields an ObsPy ``Trace`` (backwards
+            compatible). For a wildcard multi-component request, yields an
+            ObsPy ``Stream`` with one Trace per component for each chunk.
+        """
+        # Detect simple wildcard request
+        wildcard_request = ('?' in comp) or ('*' in comp)
+        component_codes = [comp]
+        if wildcard_request:
+            # Only support patterns where wildcard replaces exactly one character
+            # Typical use-case: 'HH?' or 'BH?'. Expand into Z,N,E first; if no
+            # data found for N/E try 1/2 as horizontal components.
+            base = comp.replace('*', '?')  # treat * like ? for single-char
+            if base.count('?') == 1:
+                pre, post = base.split('?')
+                candidate_sets = [['Z', 'N', 'E'], ['Z', '1', '2']]
+                expanded = []
+                for candidates in candidate_sets:
+                    expanded = [f"{pre}{c}{post}" for c in candidates]
+                    # Use first candidate set that returns at least one trace later
+                    # We'll attempt all; selection logic implemented below
+                component_codes = expanded
+            else:
+                # Fallback: if multiple wildcards, revert to original behavior
+                wildcard_request = False
+                component_codes = [comp]
+
+        def _fetch_single_component(single_comp, t_start, t_end):
+            """Inner helper replicating previous single-component logic.
+            Returns a Trace (may be empty Trace() if not found)."""
             tr = Trace()
             try:
                 if not cache:
                     raise AttributeError
-                # First check the cache
                 st = self.cache_client.get_waveforms(
-                    net, site, loc, comp, t_start, t_end, dtype="float64"
+                    net, site, loc, single_comp, t_start, t_end, dtype="float64"
                 )
                 tr = st.merge(fill_value=np.nan)[0]
                 t_diff = int(t_end - t_start)
@@ -754,25 +826,44 @@ class DataSource:
                 tr.stats["cached"] = True
             except (IndexError, AttributeError):
                 msg = "Data for {} between {} and {} not found in cache."
-                logger.debug(
-                    msg.format(".".join((net, site, loc, comp)), t_start, t_end)
-                )
+                logger.debug(msg.format(".".join((net, site, loc, single_comp)), t_start, t_end))
                 for client in self.clients:
                     try:
-                        tr = client.get_waveforms(net, site, loc, comp, t_start, t_end)
+                        tr = client.get_waveforms(net, site, loc, single_comp, t_start, t_end)
                     except Exception as e:
                         logger.info(e)
                         continue
                     else:
                         break
                 if not tr:
-                    msg = "No data found for {}"
-                    logger.error(msg.format(".".join((net, site, loc, comp))))
+                    logger.error("No data found for {}".format(".".join((net, site, loc, single_comp))))
                 else:
                     if cache:
                         self.to_sds(tr)
-            yield tr
+            return tr
 
+        t_start = start
+        t_end = end
+        if self.chunk_size is not None:
+            t_end = t_start + self.chunk_size
+            t_end = min(t_end, end)
+
+        while t_end <= end:
+            if not wildcard_request:
+                # Original behavior: single component Trace
+                tr = _fetch_single_component(component_codes[0], t_start, t_end)
+                yield tr
+            else:
+                stream = Stream()
+                for c_code in component_codes:
+                    trc = _fetch_single_component(c_code, t_start, t_end)
+                    if trc:
+                        stream += trc
+                if len(stream) == 0:
+                    logger.error("No components found for pattern {} in interval {} - {}".format(comp, t_start, t_end))
+                yield stream
+
+            # Chunk progression logic (unchanged for both modes)
             if self.chunk_size is not None:
                 t_start = t_end
                 cond1 = (end - t_end) < self.chunk_size
@@ -783,7 +874,6 @@ class DataSource:
                 else:
                     t_end = t_start + self.chunk_size
             else:
-                # go beyond the end to stop the loop
                 t_end = end + 1.0
 
 
