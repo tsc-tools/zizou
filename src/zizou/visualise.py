@@ -14,10 +14,11 @@ from plotly.subplots import make_subplots
 
 
 def spectrogram_preprocessing(
-    xdf, log=False, dbscale=False, clip=[0.0, 1.0], canvas_dim=(400, 400)
+    xdf, freq_dim=None, log=False, dbscale=False, clip=[0.0, 1.0], canvas_dim=(400, 400)
 ):
     spec = xdf.data
-    freq_dim = xdf.dims[0]
+    if freq_dim is None:
+        freq_dim = xdf.dims[0]
     freq = xdf[freq_dim].data
     dates = xdf["datetime"].data
 
