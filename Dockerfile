@@ -8,8 +8,15 @@ ARG BASE_CONTAINER=$ROOT_CONTAINER
 FROM $BASE_CONTAINER AS base 
 USER root
 
+# Copy environment file first for better layer caching
 COPY  ./environment.yml .
-RUN --mount=type=cache,target=$HOME/.conda/pkgs mamba env create -p /zizou -f environment.yml
+
+# Use cache mounts for both conda packages and conda environments
+# Also set conda to be more aggressive about using cached packages
+RUN --mount=type=cache,target=/opt/conda/pkgs \
+    --mount=type=cache,target=/opt/conda/envs \
+    mamba env create -p /zizou -f environment.yml && \
+    mamba clean --all --yes
 
 FROM $BASE_CONTAINER AS ops 
 
@@ -50,7 +57,7 @@ USER $D_USER
 
 ARG WORKDIR=$HOME
 WORKDIR $WORKDIR
-COPY --from=BASE --chown=${D_USER}:${D_GID} /zizou /zizou
+COPY --from=base --chown=${D_USER}:${D_GID} /zizou /zizou
 COPY --chown=$D_USER:users . .
 RUN /zizou/bin/pip install -e .
 
@@ -93,5 +100,5 @@ USER $D_USER
 
 ARG WORKDIR=$HOME
 WORKDIR $WORKDIR
-COPY --from=BASE --chown=${D_USER}:${D_GID} /zizou /zizou
-COPY --chown=$D_USER:users . .
+COPY --from=base --chown=${D_USER}:${D_GROUP} /zizou /zizou
+COPY --chown=$D_USER:${D_GROUP} . .
