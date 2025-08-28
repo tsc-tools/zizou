@@ -1,5 +1,11 @@
 # How to issue a new zizou release
 
+## Run tests
+To make sure that the tests pass for different Python versions run
+```
+hatch run test:run-pytest
+```
+
 ## Pypi
 Install the build system
 ```
