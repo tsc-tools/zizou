@@ -1,0 +1,39 @@
+version: '3.4'
+
+services:
+  grafana:
+    build:
+      context: .
+      dockerfile: Dockerfile_grafana
+    container_name: snet_grafana 
+    image: snet_grafana 
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=scatseisnet
+    ports:
+      - "11224:3000"
+    networks:
+      - snet_network
+
+  api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: ops
+    container_name: snet_api
+    image: snet_api
+    volumes:
+      - /scratch/VUMT/robust_forecasting:/data
+    command:
+      - /zizou/bin/zizouapi
+      - --rootdir
+      - /data
+      - --backend
+      - zarr
+    ports:
+      - "11225:8003"
+    networks:
+      - snet_network
+
+networks:
+  snet_network:
+    driver: bridge

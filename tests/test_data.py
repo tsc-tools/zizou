@@ -116,7 +116,7 @@ def test_with_gaps(setup_sds):
             nearest_sample=False)
     idx = np.where(st[0].data != t2.data)
     # data 'differs' only at NaNs
-    assert np.alltrue(np.isnan(st[0].data[idx])) == True
+    assert np.all(np.isnan(st[0].data[idx])) == True
 
 
 @pytest.mark.webservice
@@ -180,7 +180,7 @@ def test_missing_station_metadata_sds(setup_sds):
     assert np.count_nonzero(~np.isnan(tr3.data)) == 8100000
         
 
-@pytest.mark.slow
+#@pytest.mark.slow
 @mock_s3
 def test_aws_backend(setup_sds):
     """
@@ -213,10 +213,8 @@ def test_aws_backend(setup_sds):
     filename = tempfile.mktemp()
     test_data2.write(filename, format='MSEED')
     client.upload_file(Filename=filename, Bucket=bucket_name, Key=key2)
-    fdsn_urls=('https://service.geonet.org.nz',
-                'https://service-nrt.geonet.org.nz')
-    awsc = S3Waveforms(s3bucket=bucket_name, fdsn_urls=fdsn_urls,
-                       staxml_dir=sds_dir, fill_value=np.nan)
+    awsc = S3Waveforms(staxml_dir=sds_dir, fill_value=np.nan)
+    awsc.bucket = bucket_name
 
     ds = DataSource(clients=[awsc])
     net, site, loc, comp = ('NZ', 'MAVZ', '10', 'HHZ')
@@ -278,14 +276,14 @@ def test_caching():
     tr_cache = next(ds_cache.get_waveforms('NZ', 'BLUB', '', 'HHZ',
                                            starttime, endtime, cache=True))  
     assert tr_cache.stats.cached == True
-    np.alltrue(tr_orig.data == tr_cache.data)
+    assert np.all(tr_orig.data == tr_cache.data)
 
     ds_chunked = DataSource(clients=[FakeClient(tr_orig)], cache_dir=cache_dir,
                             chunk_size=86400.)
     tr_chunked = next(ds_chunked.get_waveforms('NZ', 'BLUB', '', 'HHZ',
                                                starttime, endtime, cache=True))
     assert tr_chunked.stats.cached == True
-    np.alltrue(tr_orig.slice(starttime, starttime + 86400.).data == tr_chunked.data)
+    assert np.all(tr_orig.slice(starttime, starttime + 86400.).data == tr_chunked.data)
 
 """
 Tests various permutations of station metadata availability e.g. at

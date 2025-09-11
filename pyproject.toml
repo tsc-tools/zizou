@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "zizou"
-version = "0.1.4"
+version = "0.1.5"
 authors = [
     {name = "Yannik Behr", email = "y.behr@gns.cri.nz"},
     {name = "Christof Mueller", email = "c.mueller@gns.cri.nz"},
@@ -12,7 +12,7 @@ authors = [
 description = "Python package to detect anomalies in geoscience time series data"
 license = {text = "GPL v3"}
 readme = "README.md"
-requires-python = ">=3.7"
+requires-python = ">=3.9"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
@@ -20,7 +20,8 @@ classifiers = [
 ]
 
 dependencies = [
-    "boto3",
+    "fsspec",
+    "s3fs",
     "pandas",
     "numpy",
     "scipy",
@@ -38,6 +39,10 @@ ml = ["scikit-learn", "torch", "torchvision", "torchaudio", "scikit-fuzzy"]
 Homepage = "https://tsc-tools.github.io/zizou/"
 Issues = "https://github.com/tsc-tools/zizou/issues"
 
+[project.scripts]
+snet = "zizou.snet:main"
+zizouapi = "zizou.api:main"
+
 [tool.setuptools.packages.find]
 where = ["src", "tests"]
 
@@ -50,3 +55,25 @@ log_cli = true
 
 [tool.ruff.lint]
 unfixable = ["F401"]
+
+[tool.hatch.build.targets.sdist]
+exclude = [
+  "/.github",
+  "/site",
+  "/docs",
+  "/sandbox.ipynb",
+  "/examples"
+]
+
+[tool.hatch.envs.test]
+dependencies = [
+  "coverage[toml]",
+  "pytest",
+  "httpx"
+]
+
+[[tool.hatch.envs.test.matrix]]
+python = ["3.9", "3.10", "3.11"]
+
+[tool.hatch.envs.test.scripts]
+run-pytest = "pytest --run-slow tests"

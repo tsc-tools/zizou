@@ -1,0 +1,18 @@
+FROM grafana/grafana-oss:11.5.5
+USER root
+
+SHELL ["/bin/bash", "--login", "-i", "-c"]
+
+# -- install basics
+RUN apk add --update ca-certificates tzdata curl jq git 
+
+# -- other configs
+COPY ./dashboards /var/lib/grafana/dashboards/
+COPY ./provisioning  /etc/grafana/provisioning/
+COPY ./grafana.ini /etc/grafana/
+
+
+# -- install image panel and HTML plugins
+WORKDIR /var/lib/grafana/plugins
+RUN /usr/share/grafana/bin/grafana-cli plugins install nline-plotlyjs-panel
+RUN /usr/share/grafana/bin/grafana-cli plugins install yesoreyeram-infinity-datasource

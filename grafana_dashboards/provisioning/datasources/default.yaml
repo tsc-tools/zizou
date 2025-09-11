@@ -1,0 +1,6 @@
+apiVersion: 1
+
+datasources:
+  - name: tonik 
+    type: "yesoreyeram-infinity-datasource"
+    uid: "adae6047-f57c-4af7-8d92-56881279bfdc"

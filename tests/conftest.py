@@ -2,7 +2,9 @@ import os
 import tarfile
 from datetime import datetime, timedelta
 
+from fastapi.testclient import TestClient
 import numpy as np
+from obspy import Trace, UTCDateTime
 import pandas as pd
 import pytest
 import requests
@@ -196,3 +198,22 @@ def setup_sds():
     )
     ds = DataSource(clients=[sdsc])
     return sds_dir, ds
+
+
+@pytest.fixture
+def setup_api(tmp_path_factory, monkeypatch):
+    from zizou.api import ZizouAPI
+    savedir = tmp_path_factory.mktemp("zizou_api_test_tmp", numbered=True)
+    api = ZizouAPI(rootdir=savedir)
+    def mockreturn(net, sta, loc, chan, start, end):
+        T_x, N = 1 / 100, 60000  # 20 Hz sampling rate for 50 s signal
+        t_x = np.arange(N) * T_x  # time indexes for signal
+        f_i = 1 * np.arctan((t_x - t_x[N // 2]) / 2) + 5  # varying frequency
+        dummy_data = np.sin(2*np.pi*np.cumsum(f_i)*T_x)
+        dummy_trace = Trace(data=dummy_data)
+        dummy_trace.stats.sampling_rate = 1. / T_x 
+        dummy_trace.stats.starttime = UTCDateTime("2020-01-01T00:00:00")
+        yield dummy_trace
+    monkeypatch.setattr(api.datasource, "get_waveforms", mockreturn)
+    client = TestClient(api.app)
+    return client

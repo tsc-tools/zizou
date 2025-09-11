@@ -1,0 +1,729 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": 2,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "adae6047-f57c-4af7-8d92-56881279bfdc"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 13,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 4,
+      "options": {
+        "allData": {},
+        "config": {},
+        "data": [],
+        "imgFormat": "png",
+        "layout": {
+          "font": {
+            "family": "Inter, Helvetica, Arial, sans-serif"
+          },
+          "margin": {
+            "b": 0,
+            "l": 0,
+            "r": 0,
+            "t": 0
+          },
+          "title": {
+            "automargin": true
+          },
+          "xaxis": {
+            "automargin": true,
+            "autorange": true,
+            "type": "linear"
+          },
+          "yaxis": {
+            "automargin": true,
+            "autorange": "(0,20)",
+            "range": [
+              0,
+              20
+            ],
+            "type": "linear"
+          }
+        },
+        "onclick": "// Event handling\n\n// 'data', 'variables', 'options', 'utils', and 'event' are passed as arguments\n\ntry {\n  const { type: eventType, data: eventData } = event;\n  const { timeZone, dayjs, locationService, getTemplateSrv } = utils;\n\n  switch (eventType) {\n    case 'click':\n      console.log('Click event:', eventData.points);\n      const starttime = new Date(eventData.points[0].text);\n      const endtime = new Date(starttime.getTime() + 20 * 60 * 1000);\n      const starthour = new Date(starttime);\n      const endhour = new Date(starttime);\n      starthour.setMinutes(0, 0, 0);\n      endhour.setMinutes(0, 0, 0);\n      endhour.setHours(starthour.getHours() + 1);\n      locationService.partial(\n        {\n            'var-starttime': starttime.toISOString()\n          \n        },\n        true\n      )\n      locationService.partial(\n      {\n            'var-endtime': endtime.toISOString()\n      },\n       true\n      )\n      locationService.partial(\n      {\n            'var-starthour': starthour.toISOString()\n      },\n       true\n      )\n      locationService.partial(\n      {\n            'var-endhour': endhour.toISOString()\n      },\n       true\n      )\n      console.log('Value of starttime: ', starttime.toISOString());\n      console.log('Value of endtime: ', endtime.toISOString());\n      break;\n    case 'select':\n      console.log('Selection event:', eventData.range);\n      break;\n    case 'zoom':\n      console.log('Zoom event:', eventData);\n      break;\n    default:\n      console.log('Unhandled event type:', eventType, eventData);\n  }\n\n  console.log('Current time zone:', timeZone);\n  console.log('From time:', dayjs(variables.__from).format());\n  console.log('To time:', dayjs(variables.__to).format());\n\n  // Example of using locationService\n  // locationService.partial({ 'var-example': 'test' }, true);\n\n} catch (error) {\n  console.error('Error in onclick handler:', error);\n}\n\n  ",
+        "resScale": 2,
+        "script": "// Basic timeseries plot\n\n// 'data', 'variables', 'options', and 'utils' are passed as arguments\nif (!Date.prototype.toISOString) {\n  (function() {\n\n    function pad(number) {\n      var r = String(number);\n      if (r.length === 1) {\n        r = '0' + r;\n      }\n      return r;\n    }\n\n    Date.prototype.toISOString = function() {\n      return this.getUTCFullYear() +\n        '-' + pad(this.getUTCMonth() + 1) +\n        '-' + pad(this.getUTCDate()) +\n        'T' + pad(this.getUTCHours()) +\n        ':' + pad(this.getUTCMinutes()) +\n        ':' + pad(this.getUTCSeconds()) +\n        '.' + String((this.getUTCMilliseconds() / 1000).toFixed(3)).slice(2, 5) +\n        'Z';\n    };\n\n  }());\n}\n\nlet series = data.series[0];\nlet x = series.fields[1];\nlet y = series.fields[2];\nlet dates = series.fields[0];\nconsole.log(dates, Array.isArray(dates));\nconst dateTimestamps = dates.values.map(d => new Date(d).getTime());\nconst dateStrings = dates.values.map(d => new Date(d).toISOString())\n// Choose evenly spaced ticks for the colorbar\nconst numTicks = 5;\nconst minTimestamp = Math.min(...dateTimestamps);\nconst maxTimestamp = Math.max(...dateTimestamps);\nconst tickvals = [];\nconst ticktext = [];\n\nfor (let i = 0; i < numTicks; i++) {\n      const ts = minTimestamp + (i / (numTicks - 1)) * (maxTimestamp - minTimestamp);\n      tickvals.push(ts);\n      ticktext.push(new Date(ts).toISOString().slice(0, 10)); // YYYY-MM-DD format\n}\n\nreturn {\n  data: [{\n    x: x.values || x.values.buffer,\n    y: y.values || y.values.buffer,\n    text: dateStrings,\n    type: 'scatter',\n    mode: 'markers',\n    marker: {\n      size: 5,\n      color: dateTimestamps,\n      colorscale: \"Viridis\",\n      colorbar: {\n        title: \"Date\",\n        tickvals: tickvals,\n        ticktext: ticktext\n      }\n    }\n  }],\n  layout: {\n    xaxis: { title: x.name },\n    yaxis: { title: y.name }\n  }\n}\n\nreturn {}\n  ",
+        "syncTimeRange": false,
+        "timeCol": ""
+      },
+      "pluginVersion": "1.8.1",
+      "targets": [
+        {
+          "columns": [],
+          "filters": [],
+          "format": "table",
+          "global_query_id": "",
+          "parser": "backend",
+          "refId": "A",
+          "root_selector": "",
+          "source": "url",
+          "type": "csv",
+          "url": "http://api:8003/feature?group=scatseisnet&name=embedding&starttime=${__from:date:iso}&endtime=${__to:date:iso}",
+          "url_options": {
+            "data": "",
+            "method": "GET"
+          }
+        }
+      ],
+      "title": "Waveform Atlas",
+      "transformations": [
+        {
+          "id": "groupingToMatrix",
+          "options": {
+            "columnField": "freqs",
+            "rowField": "dates",
+            "valueField": "feature"
+          }
+        },
+        {
+          "id": "convertFieldType",
+          "options": {
+            "conversions": [
+              {
+                "destinationType": "time",
+                "targetField": "dates\\freqs"
+              }
+            ],
+            "fields": {}
+          }
+        }
+      ],
+      "type": "nline-plotlyjs-panel"
+    },
+    {
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "adae6047-f57c-4af7-8d92-56881279bfdc"
+      },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 6,
+      "options": {
+        "allData": {},
+        "config": {},
+        "data": [],
+        "imgFormat": "png",
+        "layout": {
+          "font": {
+            "family": "Inter, Helvetica, Arial, sans-serif"
+          },
+          "margin": {
+            "b": 0,
+            "l": 0,
+            "r": 0,
+            "t": 0
+          },
+          "title": {
+            "automargin": true
+          },
+          "xaxis": {
+            "automargin": true,
+            "autorange": true,
+            "type": "date"
+          },
+          "yaxis": {
+            "automargin": true,
+            "autorange": true
+          }
+        },
+        "onclick": "// Event handling\n/*\n// 'data', 'variables', 'options', 'utils', and 'event' are passed as arguments\n\ntry {\n  const { type: eventType, data: eventData } = event;\n  const { timeZone, dayjs, locationService, getTemplateSrv } = utils;\n\n  switch (eventType) {\n    case 'click':\n      console.log('Click event:', eventData.points);\n      break;\n    case 'select':\n      console.log('Selection event:', eventData.range);\n      break;\n    case 'zoom':\n      console.log('Zoom event:', eventData);\n      break;\n    default:\n      console.log('Unhandled event type:', eventType, eventData);\n  }\n\n  console.log('Current time zone:', timeZone);\n  console.log('From time:', dayjs(variables.__from).format());\n  console.log('To time:', dayjs(variables.__to).format());\n\n  // Example of using locationService\n  // locationService.partial({ 'var-example': 'test' }, true);\n\n} catch (error) {\n  console.error('Error in onclick handler:', error);\n}\n*/\n  ",
+        "resScale": 2,
+        "script": "// Basic timeseries plot\n\n// 'data', 'variables', 'options', and 'utils' are passed as arguments\n\nlet series = data.series[0];\nlet x = series.fields[0];\nlet y = series.fields[1];\n\nreturn {\n  data: [{\n    x: x.values || x.values.buffer,\n    y: y.values || y.values.buffer,\n    type: 'scatter',\n    mode: 'lines',\n    line: {\n      width: 1\n    }\n  }],\n  layout: {\n    xaxis: { title: x.name },\n    yaxis: { title: y.name }\n  }\n}\n\nreturn {}\n  ",
+        "syncTimeRange": false,
+        "timeCol": ""
+      },
+      "pluginVersion": "1.8.1",
+      "targets": [
+        {
+          "columns": [
+            {
+              "selector": "dates",
+              "text": "",
+              "type": "timestamp"
+            },
+            {
+              "selector": "feature",
+              "text": "",
+              "type": "number"
+            },
+            {
+              "selector": "freqs",
+              "text": "",
+              "type": "number"
+            }
+          ],
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "adae6047-f57c-4af7-8d92-56881279bfdc"
+          },
+          "filters": [],
+          "format": "table",
+          "global_query_id": "",
+          "refId": "A",
+          "root_selector": "",
+          "source": "url",
+          "type": "csv",
+          "url": "http://api:8003/waveform?network=NZ&station=MAVZ&location=10&channel=HHZ&starttime=${starttime}&duration=1200",
+          "url_options": {
+            "data": "",
+            "method": "GET"
+          }
+        }
+      ],
+      "title": "NZ.MAVZ.10.HHZ",
+      "transformations": [
+        {
+          "id": "convertFieldType",
+          "options": {
+            "conversions": [],
+            "fields": {}
+          }
+        }
+      ],
+      "type": "nline-plotlyjs-panel"
+    },
+    {
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "adae6047-f57c-4af7-8d92-56881279bfdc"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "log": 2,
+              "type": "log"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 12,
+        "y": 6
+      },
+      "id": 8,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "11.5.5",
+      "targets": [
+        {
+          "columns": [
+            {
+              "selector": "dates",
+              "text": "",
+              "type": "timestamp"
+            },
+            {
+              "selector": "feature",
+              "text": "",
+              "type": "number"
+            }
+          ],
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "adae6047-f57c-4af7-8d92-56881279bfdc"
+          },
+          "filters": [],
+          "format": "table",
+          "global_query_id": "",
+          "refId": "A",
+          "root_selector": "",
+          "source": "url",
+          "type": "csv",
+          "url": "https://gessp.gns.cri.nz/vumt-api/feature?group=vumt&name=${feature}&resolution=${__interval}&subdir=Ruapehu&subdir=MAVZ&subdir=HHZ&starttime=${__from:date:iso}&endtime=${__to:date:iso}",
+          "url_options": {
+            "data": "",
+            "method": "GET"
+          }
+        }
+      ],
+      "title": "${feature}",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "adae6047-f57c-4af7-8d92-56881279bfdc"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "scaleDistribution": {
+              "type": "linear"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 13
+      },
+      "id": 7,
+      "options": {
+        "calculate": false,
+        "cellGap": 0,
+        "color": {
+          "exponent": 0.5,
+          "fill": "dark-orange",
+          "mode": "scheme",
+          "reverse": true,
+          "scale": "exponential",
+          "scheme": "Inferno",
+          "steps": 127
+        },
+        "exemplars": {
+          "color": "rgba(255,0,255,0.7)"
+        },
+        "filterValues": {
+          "le": 1e-9
+        },
+        "legend": {
+          "show": true
+        },
+        "rowsFrame": {
+          "layout": "auto"
+        },
+        "tooltip": {
+          "mode": "single",
+          "showColorScale": false,
+          "yHistogram": false
+        },
+        "yAxis": {
+          "axisPlacement": "left",
+          "decimals": 2,
+          "reverse": false
+        }
+      },
+      "pluginVersion": "11.5.5",
+      "targets": [
+        {
+          "columns": [
+            {
+              "selector": "dates",
+              "text": "",
+              "type": "timestamp"
+            },
+            {
+              "selector": "feature",
+              "text": "",
+              "type": "number"
+            },
+            {
+              "selector": "freqs",
+              "text": "",
+              "type": "number"
+            }
+          ],
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "adae6047-f57c-4af7-8d92-56881279bfdc"
+          },
+          "filters": [],
+          "format": "table",
+          "global_query_id": "",
+          "refId": "A",
+          "root_selector": "",
+          "source": "url",
+          "type": "csv",
+          "url": "http://api:8003/feature?group=scatseisnet&name=order1_channel0&starttime=${__from:date:iso}&normalise=true&endtime=${__to:date:iso}&resolution=${__interval}&log=true&verticalres=24",
+          "url_options": {
+            "data": "",
+            "method": "GET"
+          }
+        }
+      ],
+      "title": "Scattering Coefficients",
+      "transformations": [
+        {
+          "id": "calculateField",
+          "options": {
+            "mode": "unary",
+            "reduce": {
+              "reducer": "sum"
+            },
+            "replaceFields": false,
+            "unary": {
+              "fieldName": "feature",
+              "operator": "abs"
+            }
+          }
+        },
+        {
+          "id": "groupingToMatrix",
+          "options": {
+            "columnField": "freqs",
+            "emptyValue": "zero",
+            "rowField": "dates",
+            "valueField": "abs(feature)"
+          }
+        },
+        {
+          "id": "convertFieldType",
+          "options": {
+            "conversions": [
+              {
+                "destinationType": "time",
+                "targetField": "dates\\freqs"
+              }
+            ],
+            "fields": {}
+          }
+        }
+      ],
+      "type": "heatmap"
+    },
+    {
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "adae6047-f57c-4af7-8d92-56881279bfdc"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "scaleDistribution": {
+              "type": "linear"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 12,
+        "x": 0,
+        "y": 20
+      },
+      "id": 3,
+      "options": {
+        "calculate": false,
+        "cellGap": 1,
+        "color": {
+          "exponent": 0.5,
+          "fill": "dark-orange",
+          "mode": "scheme",
+          "reverse": false,
+          "scale": "exponential",
+          "scheme": "Oranges",
+          "steps": 64
+        },
+        "exemplars": {
+          "color": "rgba(255,0,255,0.7)"
+        },
+        "filterValues": {
+          "le": 1e-9
+        },
+        "legend": {
+          "show": true
+        },
+        "rowsFrame": {
+          "layout": "auto"
+        },
+        "tooltip": {
+          "mode": "single",
+          "showColorScale": false,
+          "yHistogram": false
+        },
+        "yAxis": {
+          "axisPlacement": "left",
+          "reverse": false
+        }
+      },
+      "pluginVersion": "11.5.5",
+      "targets": [
+        {
+          "columns": [
+            {
+              "selector": "dates",
+              "text": "",
+              "type": "timestamp"
+            },
+            {
+              "selector": "feature",
+              "text": "",
+              "type": "number"
+            },
+            {
+              "selector": "freqs",
+              "text": "",
+              "type": "number"
+            }
+          ],
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "adae6047-f57c-4af7-8d92-56881279bfdc"
+          },
+          "filters": [],
+          "format": "table",
+          "global_query_id": "",
+          "refId": "A",
+          "root_selector": "",
+          "source": "url",
+          "type": "csv",
+          "url": "http://api:8003/feature?group=scatseisnet&name=embedding&starttime=${__from:date:iso}&endtime=${__to:date:iso}",
+          "url_options": {
+            "data": "",
+            "method": "GET"
+          }
+        }
+      ],
+      "title": "Embeddings",
+      "transformations": [
+        {
+          "id": "groupingToMatrix",
+          "options": {
+            "columnField": "freqs",
+            "rowField": "dates",
+            "valueField": "feature"
+          }
+        },
+        {
+          "id": "convertFieldType",
+          "options": {
+            "conversions": [
+              {
+                "destinationType": "time",
+                "targetField": "dates\\freqs"
+              }
+            ],
+            "fields": {}
+          }
+        }
+      ],
+      "type": "heatmap"
+    }
+  ],
+  "preload": false,
+  "refresh": "",
+  "schemaVersion": 40,
+  "tags": [],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "text": "2022-03-08T20:10:00.000Z",
+          "value": "2022-03-08T20:10:00.000Z"
+        },
+        "hide": 2,
+        "name": "starttime",
+        "options": [
+          {
+            "selected": true,
+            "text": "2022-03-08T20:10:00.000Z",
+            "value": "2022-03-08T20:10:00.000Z"
+          }
+        ],
+        "query": "2022-03-08T20:10:00.000Z",
+        "type": "custom"
+      },
+      {
+        "current": {
+          "text": "2022-03-08T20:30:00.000Z",
+          "value": "2022-03-08T20:30:00.000Z"
+        },
+        "hide": 2,
+        "name": "endtime",
+        "options": [
+          {
+            "selected": true,
+            "text": "2022-03-08T20:30:00.000Z",
+            "value": "2022-03-08T20:30:00.000Z"
+          }
+        ],
+        "query": "2022-03-08T20:30:00.000Z",
+        "type": "custom"
+      },
+      {
+        "current": {
+          "text": "2022-03-08T20:00:00.000Z",
+          "value": "2022-03-08T20:00:00.000Z"
+        },
+        "hide": 2,
+        "name": "starthour",
+        "options": [
+          {
+            "selected": true,
+            "text": "2022-03-08T20:00:00.000Z",
+            "value": "2022-03-08T20:00:00.000Z"
+          }
+        ],
+        "query": "2022-03-08T20:00:00.000Z",
+        "type": "custom"
+      },
+      {
+        "current": {
+          "text": "2022-03-08T21:00:00.000Z",
+          "value": "2022-03-08T21:00:00.000Z"
+        },
+        "hide": 2,
+        "name": "endhour",
+        "options": [
+          {
+            "selected": true,
+            "text": "2022-03-08T21:00:00.000Z",
+            "value": "2022-03-08T21:00:00.000Z"
+          }
+        ],
+        "query": "2022-03-08T21:00:00.000Z",
+        "type": "custom"
+      },
+      {
+        "current": {
+          "text": "rsam",
+          "value": "rsam"
+        },
+        "description": "",
+        "label": "Feature",
+        "name": "feature",
+        "options": [
+          {
+            "selected": true,
+            "text": "rsam",
+            "value": "rsam"
+          },
+          {
+            "selected": false,
+            "text": "dsar",
+            "value": "dsar"
+          },
+          {
+            "selected": false,
+            "text": "bandwidth",
+            "value": "bandwidth"
+          },
+          {
+            "selected": false,
+            "text": "central_freq",
+            "value": "central_freq"
+          },
+          {
+            "selected": false,
+            "text": "predom_freq",
+            "value": "predom_freq"
+          }
+        ],
+        "query": "rsam,dsar,bandwidth,central_freq,predom_freq",
+        "type": "custom"
+      }
+    ]
+  },
+  "time": {
+    "from": "2021-12-31T11:00:00.000Z",
+    "to": "2022-12-29T11:00:00.000Z"
+  },
+  "timepicker": {},
+  "timezone": "utc",
+  "title": "Scatseisnet",
+  "uid": "aexhxuvfr9csgf",
+  "version": 26,
+  "weekStart": ""
+}
