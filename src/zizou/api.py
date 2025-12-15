@@ -11,6 +11,7 @@ from scipy.signal import ShortTimeFFT
 from scipy.signal.windows import tukey
 import uvicorn
 from tonik.api import TonikAPI
+import xarray as xr
 
 from zizou import DataSource, S3Waveforms, FDSNWaveforms
 
@@ -78,7 +79,8 @@ class ZizouAPI(TonikAPI):
                 starttime: str,
                 duration: int,
                 maxResLimit: float = 1.0,
-                resolution: str = "full"):
+                resolution: str = '1m',
+                verticalres: int = 20):
 
         output = None
         _st = self.preprocess_datetime(starttime)
@@ -91,10 +93,19 @@ class ZizouAPI(TonikAPI):
                     raise HTTPException(status_code=404, detail=f"No data in period {_st} - {_et} for {network}.{station}.{location}.{channel}")
                 tr.detrend('constant')
                 tr.resample(25)
-                df = self.getSpectrogramDataFrame(tr)
-                df['feature'] = df['feature'].abs()
-                output = df.to_csv(index=False, columns=['dates', 'freqs', 'feature'])
-                
+                xda = self.compute_spectrogram(tr)
+                nfreqs = xda.shape[0] 
+                dates = xda.coords['datetime'].values
+                freq, dates, spec = self.aggregate_feature(resolution, verticalres, xda, nfreqs, dates)
+                vals = spec.ravel(order='C')
+                vals = (vals - np.nanmin(vals)) / \
+                    (np.nanmax(vals) - np.nanmin(vals))
+                freqs = freq.repeat(dates.size)
+                dates = np.tile(dates, freq.size)
+                df = pd.DataFrame(
+                    {'dates': dates, 'freqs': freqs, 'feature': vals})
+                df['dates'] = pd.to_datetime(df.dates.values).strftime('%Y-%m-%dT%H:%M:%SZ')
+                output = df.to_csv(index=False, columns=['dates', 'freqs', 'feature']) 
             if output is not None:
                 return StreamingResponse(iter([output]),
                                             media_type='text/csv',
@@ -102,22 +113,20 @@ class ZizouAPI(TonikAPI):
                                                     "attachment;filename=<VUMT_feature>.csv",
                                                     'Content-Length': str(len(output))})
 
-    def getSpectrogramDataFrame(self, tr, nperseg=256, noverlap=128):
+    def compute_spectrogram(self, tr, nperseg=256, noverlap=128):
             win = tukey(nperseg, alpha=0.25)
             stft = ShortTimeFFT(win, hop=noverlap, fs=tr.stats.sampling_rate)
             Sxx = stft.spectrogram(tr.data)
             (t1, t2, f1, f2) = stft.extent(tr.stats.npts)
             frequencies = np.linspace(f1, f2, Sxx.shape[0])
-            times = np.linspace(t1, t2, Sxx.shape[1])
-            spectrogram_df = pd.DataFrame(10 * np.log10(Sxx), columns=times, index=frequencies)
-            spectrogram_df = spectrogram_df.unstack().reset_index()
-            spectrogram_df.columns = ['dates', 'freqs', 'feature']
             desired_start_date = pd.to_datetime(tr.stats.starttime.isoformat())
-            spectrogram_df['dates'] = pd.to_datetime(spectrogram_df['dates'], unit='s')
-            time_difference = desired_start_date - spectrogram_df['dates'].min()
-            spectrogram_df['dates'] =spectrogram_df['dates'] + time_difference
-            spectrogram_df = spectrogram_df.dropna()
-            return spectrogram_df
+            times = np.linspace(t1, t2, Sxx.shape[1])
+            datetimes = pd.to_datetime(times, unit='s')
+            time_difference = desired_start_date - datetimes.min()
+            datetimes = datetimes + time_difference
+            xda = xr.DataArray(10 * np.log10(Sxx), coords=[frequencies, datetimes],
+                               dims=['frequency', 'datetime'])
+            return xda 
 
  
 

@@ -11,7 +11,7 @@ def test_waveforms(setup_api):
         txt = r.text
     assert r.status_code == 200
     df = pd.read_csv(StringIO(txt), parse_dates=True, index_col=0)
-    assert df.shape == (250, 1)
+    assert df.shape == (15000, 1)
 
 
 def test_spectrogram(setup_api):
@@ -23,4 +23,4 @@ def test_spectrogram(setup_api):
         txt = r.text
     assert r.status_code == 200
     df = pd.read_csv(StringIO(txt), parse_dates=True, index_col=0)
-    assert df.shape == (15351, 2)
+    assert df.shape == (200, 2)

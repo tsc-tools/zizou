@@ -226,82 +226,51 @@
         "uid": "adae6047-f57c-4af7-8d92-56881279bfdc"
       },
       "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 0,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "log": 2,
-              "type": "log"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
-              }
-            ]
-          }
-        },
+        "defaults": {},
         "overrides": []
       },
       "gridPos": {
-        "h": 6,
+        "h": 7,
         "w": 12,
         "x": 12,
         "y": 6
       },
-      "id": 8,
+      "id": 9,
       "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": false
+        "allData": {},
+        "config": {},
+        "data": [],
+        "imgFormat": "png",
+        "layout": {
+          "font": {
+            "family": "Inter, Helvetica, Arial, sans-serif"
+          },
+          "margin": {
+            "b": 0,
+            "l": 0,
+            "r": 0,
+            "t": 0
+          },
+          "title": {
+            "automargin": true
+          },
+          "xaxis": {
+            "automargin": true,
+            "autorange": true,
+            "type": "date"
+          },
+          "yaxis": {
+            "automargin": true,
+            "autorange": true
+          }
         },
-        "tooltip": {
-          "hideZeros": false,
-          "mode": "single",
-          "sort": "none"
-        }
+        "onclick": "// Event handling\n/*\n// 'data', 'variables', 'options', 'utils', and 'event' are passed as arguments\n\ntry {\n  const { type: eventType, data: eventData } = event;\n  const { timeZone, dayjs, locationService, getTemplateSrv } = utils;\n\n  switch (eventType) {\n    case 'click':\n      console.log('Click event:', eventData.points);\n      break;\n    case 'select':\n      console.log('Selection event:', eventData.range);\n      break;\n    case 'zoom':\n      console.log('Zoom event:', eventData);\n      break;\n    default:\n      console.log('Unhandled event type:', eventType, eventData);\n  }\n\n  console.log('Current time zone:', timeZone);\n  console.log('From time:', dayjs(variables.__from).format());\n  console.log('To time:', dayjs(variables.__to).format());\n\n  // Example of using locationService\n  // locationService.partial({ 'var-example': 'test' }, true);\n\n} catch (error) {\n  console.error('Error in onclick handler:', error);\n}\n*/\n  ",
+        "resScale": 2,
+        "script": "// Basic timeseries plot\n\n// 'data', 'variables', 'options', and 'utils' are passed as arguments\n\n\nconst frame = data.series[0];\nconst fields = frame.fields;\nconst rowLabels = fields[0].values.toArray();\nconst colLabels = fields.slice(1).map(f => f.name);\n\nconst z = [];\nfor (let rowIndex = 0; rowIndex < frame.length; rowIndex++){\n  const row = [];\n  for (let colIndex = 1; colIndex < fields.length; colIndex++) {\n    row.push(fields[colIndex].values.get(rowIndex));\n  }\n  z.push(row);\n}\n\nconst transpose = m => m[0].map((_, colIndex) => m.map(row => row[colIndex]));\nconst zT = transpose(z);\n\nreturn {\n  data: [{\n    z: zT,\n    type: 'heatmap',\n    y: colLabels,\n    x: rowLabels,\n    colorscale: \"Viridis\",\n    showscale: false\n  }],\n  layout: {\n    autosize: true\n  }\n}\n\nreturn {}\n  ",
+        "syncTimeRange": false,
+        "timeCol": ""
       },
-      "pluginVersion": "11.5.5",
+      "pluginVersion": "1.8.1",
       "targets": [
         {
           "columns": [
@@ -312,6 +281,11 @@
             },
             {
               "selector": "feature",
+              "text": "",
+              "type": "number"
+            },
+            {
+              "selector": "freqs",
               "text": "",
               "type": "number"
             }
@@ -327,15 +301,38 @@
           "root_selector": "",
           "source": "url",
           "type": "csv",
-          "url": "https://gessp.gns.cri.nz/vumt-api/feature?group=vumt&name=${feature}&resolution=${__interval}&subdir=Ruapehu&subdir=MAVZ&subdir=HHZ&starttime=${__from:date:iso}&endtime=${__to:date:iso}",
+          "url": "http://api:8003/spectrogram?network=NZ&station=MAVZ&location=10&channel=HHZ&starttime=${starttime}&resolution=10s&verticalres=50&&duration=1200",
           "url_options": {
             "data": "",
             "method": "GET"
           }
         }
       ],
-      "title": "${feature}",
-      "type": "timeseries"
+      "title": "NZ.MAVZ.10.HHZ - spectrogram",
+      "transformations": [
+        {
+          "id": "groupingToMatrix",
+          "options": {
+            "columnField": "freqs",
+            "emptyValue": "zero",
+            "rowField": "dates",
+            "valueField": "feature"
+          }
+        },
+        {
+          "id": "convertFieldType",
+          "options": {
+            "conversions": [
+              {
+                "destinationType": "time",
+                "targetField": "dates\\freqs"
+              }
+            ],
+            "fields": {}
+          }
+        }
+      ],
+      "type": "nline-plotlyjs-panel"
     },
     {
       "datasource": {
@@ -476,6 +473,123 @@
         }
       ],
       "type": "heatmap"
+    },
+    {
+      "datasource": {
+        "type": "yesoreyeram-infinity-datasource",
+        "uid": "adae6047-f57c-4af7-8d92-56881279bfdc"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "log": 2,
+              "type": "log"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 13
+      },
+      "id": 8,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "11.5.5",
+      "targets": [
+        {
+          "columns": [
+            {
+              "selector": "dates",
+              "text": "",
+              "type": "timestamp"
+            },
+            {
+              "selector": "feature",
+              "text": "",
+              "type": "number"
+            }
+          ],
+          "datasource": {
+            "type": "yesoreyeram-infinity-datasource",
+            "uid": "adae6047-f57c-4af7-8d92-56881279bfdc"
+          },
+          "filters": [],
+          "format": "table",
+          "global_query_id": "",
+          "refId": "A",
+          "root_selector": "",
+          "source": "url",
+          "type": "csv",
+          "url": "https://gessp.gns.cri.nz/vumt-api/feature?group=vumt&name=${feature}&resolution=${__interval}&subdir=Ruapehu&subdir=MAVZ&subdir=HHZ&starttime=${__from:date:iso}&endtime=${__to:date:iso}",
+          "url_options": {
+            "data": "",
+            "method": "GET"
+          }
+        }
+      ],
+      "title": "${feature}",
+      "type": "timeseries"
     },
     {
       "datasource": {
@@ -722,8 +836,8 @@
   },
   "timepicker": {},
   "timezone": "utc",
-  "title": "Scatseisnet",
-  "uid": "aexhxuvfr9csgf",
-  "version": 26,
+  "title": "Scatseisnet Copy",
+  "uid": "aexhxuvfr9csgff",
+  "version": 6,
   "weekStart": ""
 }

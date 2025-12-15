@@ -59,7 +59,8 @@ ARG WORKDIR=$HOME
 WORKDIR $WORKDIR
 COPY --from=base --chown=${D_USER}:${D_GID} /zizou /zizou
 COPY --chown=$D_USER:users . .
-RUN /zizou/bin/pip install -e .
+RUN /zizou/bin/pip install .
+VOLUME ["$HOME/data"]
 
 FROM $BASE_CONTAINER AS dev 
 

@@ -797,10 +797,10 @@ class DataSource:
             base = comp.replace('*', '?')  # treat * like ? for single-char
             if base.count('?') == 1:
                 pre, post = base.split('?')
-                candidate_sets = [['Z', 'N', 'E'], ['Z', '1', '2']]
+                candidate_sets = [['Z'], ['N', 'E'], ['1', '2']]
                 expanded = []
                 for candidates in candidate_sets:
-                    expanded = [f"{pre}{c}{post}" for c in candidates]
+                    expanded += [f"{pre}{c}{post}" for c in candidates]
                     # Use first candidate set that returns at least one trace later
                     # We'll attempt all; selection logic implemented below
                 component_codes = expanded
